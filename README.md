@@ -1,6 +1,8 @@
 # 🎬UnQTube
 ⚡Automating top 10 and short YouTube video maker with ChatGPT without API⚡
 
+Created by: Sandeep Gaddam
+
 ## Sample Top 10 video
 
 <div align="center">
@@ -31,6 +33,46 @@ If you prefer not to install the prerequisites on your local system, you can use
 
 Important : For make short video or intro with video in long video,you need set pexels API (get pexels API from [pexels.com](pexels.com) for free)
 
+# 🖥️Running UnQTube on Google Colab
+
+Follow these steps to run UnQTube directly on Google Colab:
+
+1. Open a new Google Colab notebook at [colab.research.google.com](https://colab.research.google.com)
+
+2. Clone the repository:
+   ```
+   !git clone https://github.com/Sandeepgaddam5432/UnQTube-.git
+   ```
+
+3. Change to the project directory:
+   ```
+   %cd UnQTube-
+   ```
+
+4. Install the required dependencies:
+   ```
+   !pip install -r requirements.txt
+   ```
+
+5. Run the tool:
+   
+   For GUI (note: Colab may have limitations with tkinter GUIs):
+   ```
+   !python rungui.py
+   ```
+   
+   Or for command-line operation:
+   ```
+   !python video.py -topic "your topic here" -general_topic "general topic" -time "5" -language "english"
+   ```
+   
+   For short videos:
+   ```
+   !python short.py -topic "your topic here" -time "30" -language "english"
+   ```
+
+6. Important: For videos with intro videos or short videos, you'll need a Pexels API key. You can get one for free from [pexels.com](https://pexels.com)
+
 # 🎥Run on local system
 ## Prerequisites
 
@@ -41,12 +83,12 @@ Before you begin, ensure that you have the following prerequisites installed on 
 ## Installation Steps
 ### Step 1: Clone Repository
    ```
-   git clone https://github.com/amirreza1307/UnQTube.git
+   git clone https://github.com/Sandeepgaddam5432/UnQTube-.git
    ```
 ### Step 2: install Requirements
 
    ```
-   cd UnQTube
+   cd UnQTube-
    ```
    ```
    pip install -r requirements.txt
