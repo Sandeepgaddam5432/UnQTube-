@@ -39,29 +39,30 @@ Follow these steps to run UnQTube directly on Google Colab:
 
 1. Open a new Google Colab notebook at [colab.research.google.com](https://colab.research.google.com)
 
-2. Clone the repository:
+2. Install required system packages (for tkinter support):
+   ```
+   !apt-get update
+   !apt-get install -y python3-tk
+   ```
+
+3. Clone the repository:
    ```
    !git clone https://github.com/Sandeepgaddam5432/UnQTube-.git
    ```
 
-3. Change to the project directory:
+4. Change to the project directory:
    ```
    %cd UnQTube-
    ```
 
-4. Install the required dependencies:
+5. Install the required dependencies:
    ```
    !pip install -r requirements.txt
    ```
 
-5. Run the tool:
+6. Run the tool (command-line method recommended for Colab):
    
-   For GUI (note: Colab may have limitations with tkinter GUIs):
-   ```
-   !python rungui.py
-   ```
-   
-   Or for command-line operation:
+   For long videos:
    ```
    !python video.py -topic "your topic here" -general_topic "general topic" -time "5" -language "english"
    ```
@@ -71,7 +72,9 @@ Follow these steps to run UnQTube directly on Google Colab:
    !python short.py -topic "your topic here" -time "30" -language "english"
    ```
 
-6. Important: For videos with intro videos or short videos, you'll need a Pexels API key. You can get one for free from [pexels.com](https://pexels.com)
+   **Note**: GUI version (`rungui.py`) is not recommended for Colab as tkinter interfaces cannot display directly in the notebook environment.
+
+7. Important: For videos with intro videos or short videos, you'll need a Pexels API key. You can get one for free from [pexels.com](https://pexels.com)
 
 # 🎥Run on local system
 ## Prerequisites

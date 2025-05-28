@@ -1,0 +1,10 @@
+edge-tts
+moviepy
+numpy
+pillow
+requests
+asyncio
+argparse
+deep-translator
+pyyaml
+opencv-python
