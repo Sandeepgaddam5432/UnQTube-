@@ -33,8 +33,8 @@ def list_available_gemini_models(api_key=None):
         
     if not api_key:
         print("Warning: No API key provided. Cannot list available models.")
-        # Return some default models that are likely available
-        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
+        # Return reliable default models, including the known working preview model
+        return ["models/gemini-pro", "models/gemini-1.5-pro", "models/gemini-2.5-flash-preview-04-17"]
         
     url = f"https://generativelanguage.googleapis.com/v1/models"
     
@@ -47,64 +47,132 @@ def list_available_gemini_models(api_key=None):
         
         if response.status_code != 200:
             print(f"Error listing models: {response.status_code} - {response.text}")
-            # Return some default models as fallback
-            return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
+            # Return reliable default models as fallback
+            return ["models/gemini-pro", "models/gemini-1.5-pro", "models/gemini-2.5-flash-preview-04-17"]
             
         result = response.json()
         
         # Extract just the model names that support text generation
         text_generation_models = []
-        vision_models = []
-        other_models = []
+        excluded_models = []
+        
+        # Keywords that suggest a model might not be primarily for text generation
+        vision_keywords = ["vision", "image-generation", "image-generat", "img"]
+        tuning_keywords = ["tuning", "tune", "training"]
+        embed_keywords = ["embed", "embedding"]
         
         for model in result.get("models", []):
             name = model.get("name", "")
             supported_methods = model.get("supportedGenerationMethods", [])
+            display_name = model.get("displayName", "").lower()
             
-            # Only include models that:
-            # 1. Have "gemini" in their name
-            # 2. Support the generateContent method
-            # 3. Don't have "-vision" in their name unless they also support text generation
+            # Only include models that have "gemini" in their name
             if "gemini" in name.lower():
+                # Check if this is likely a text generation model
+                is_text_model = True
+                
+                # Skip if model name contains certain keywords suggesting non-text primary purpose
+                lower_name = name.lower()
+                
+                # Check for vision-specific models
+                if any(kw in lower_name for kw in vision_keywords):
+                    print(f"Skipping likely vision model: {name}")
+                    excluded_models.append(name)
+                    continue
+                    
+                # Check for tuning-specific models
+                if any(kw in lower_name for kw in tuning_keywords):
+                    print(f"Skipping likely tuning model: {name}")
+                    excluded_models.append(name)
+                    continue
+                    
+                # Check for embedding-specific models
+                if any(kw in lower_name for kw in embed_keywords):
+                    print(f"Skipping likely embedding model: {name}")
+                    excluded_models.append(name)
+                    continue
+                
+                # Specifically include our known working model
+                if "gemini-2.5-flash-preview-04-17" in name:
+                    print(f"Including known working text model: {name}")
+                    text_generation_models.append(name)
+                    continue
+                
+                # Only include models that support generateContent
                 if "generateContent" in supported_methods:
-                    # Check if this is a vision-specific model
-                    if "vision" in name.lower() and not any(method != "generateContent" for method in supported_methods):
-                        vision_models.append(name)
-                    else:
-                        # This is a text-capable model or multi-modal model
-                        text_generation_models.append(name)
+                    text_generation_models.append(name)
                 else:
-                    # Models that don't support generateContent at all
-                    other_models.append(name)
+                    excluded_models.append(name)
         
-        # Log all models by category for debugging
-        print(f"Found {len(text_generation_models)} text generation models")
-        print(f"Found {len(vision_models)} vision-only models (excluded)")
-        print(f"Found {len(other_models)} other models that don't support text generation (excluded)")
+        # Log results for debugging
+        print(f"Found {len(text_generation_models)} text generation models after strict filtering")
+        if excluded_models:
+            print(f"Excluded {len(excluded_models)} models that didn't meet text generation criteria")
         
+        # If no text models found, provide reliable fallbacks
         if not text_generation_models:
-            print("Warning: No Gemini models found that support text generation")
-            # Return default models as fallback
-            return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
+            print("Warning: No Gemini models found that support text generation after strict filtering")
+            print("Using reliable default models instead")
+            # Include the known working preview model
+            return ["models/gemini-pro", "models/gemini-1.5-pro", "models/gemini-2.5-flash-preview-04-17"]
+            
+        # Make sure our known working model is included
+        known_working_model = "models/gemini-2.5-flash-preview-04-17"
+        if known_working_model not in text_generation_models:
+            print(f"Adding known working model to list: {known_working_model}")
+            text_generation_models.append(known_working_model)
             
         return text_generation_models
     except Exception as e:
         print(f"Error fetching available models: {e}")
-        # Return default models as fallback
-        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
+        # Return reliable default models as fallback, including the known working preview model
+        return ["models/gemini-pro", "models/gemini-1.5-pro", "models/gemini-2.5-flash-preview-04-17"]
+
+def is_beta_model(model_name):
+    """Determine if a model requires the v1beta API endpoint
+    
+    Args:
+        model_name: The model name (with or without 'models/' prefix)
+        
+    Returns:
+        True if the model requires v1beta, False otherwise
+    """
+    # Strip "models/" prefix if present
+    if model_name.startswith("models/"):
+        model_id = model_name[7:]
+    else:
+        model_id = model_name
+        
+    # Models that require v1beta API
+    if any(term in model_id.lower() for term in ["preview", "2.5", "2-0"]):
+        return True
+        
+    # Specific models known to require v1beta
+    beta_models = [
+        "gemini-2.5-flash-preview-04-17",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-pro",
+        "gemini-2.0-flash"
+    ]
+    
+    if any(beta_model in model_id for beta_model in beta_models):
+        return True
+        
+    return False
 
 def get_gemini_model():
     """Get the selected Gemini model from config file or use default"""
     try:
-        model = read_config_file().get('gemini_model', 'models/gemini-pro')
+        model = read_config_file().get('gemini_model', 'models/gemini-2.5-flash-preview-04-17')
         # Ensure model has the required "models/" prefix
         if not model.startswith("models/"):
             model = f"models/{model}"
         return model
     except Exception as e:
         print(f"Warning: Could not read model from config: {e}")
-        # Default to a stable model if not specified
-        return 'models/gemini-pro'
+        # Default to our known working model
+        return 'models/gemini-2.5-flash-preview-04-17'
 
 def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
     """Generate script using Gemini API
@@ -127,14 +195,18 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
     model_name = get_gemini_model()
     
     # Extract the model ID from the full model name
-    # The API expects just the model ID (e.g., "gemini-pro") as a parameter
     if model_name.startswith("models/"):
         model_id = model_name[7:]  # Remove "models/" prefix for the API request
     else:
         model_id = model_name
     
-    # Use the correct API endpoint format
-    url = "https://generativelanguage.googleapis.com/v1/models/" + model_id + ":generateContent"
+    # Determine if this model needs v1beta API
+    use_beta_api = is_beta_model(model_id)
+    api_version = "v1beta" if use_beta_api else "v1"
+    
+    # Use the correct API endpoint format with appropriate version
+    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_id}:generateContent"
+    print(f"Using API endpoint: {url}")
     
     headers = {
         "Content-Type": "application/json",
@@ -177,10 +249,12 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
                     print(f"Response structure: {json.dumps(result, indent=2)[:500]}...")
                     raise Exception(f"Unexpected Gemini API response format: {e}")
             elif response.status_code == 404:
-                # Model not found error - try with a different model
-                print(f"Model {model_id} not found. Attempting to use gemini-pro instead.")
-                model_id = "gemini-pro"
-                url = "https://generativelanguage.googleapis.com/v1/models/" + model_id + ":generateContent"
+                # Model not found error - try the known working model
+                print(f"Model {model_id} not found. Trying known working model gemini-2.5-flash-preview-04-17 instead.")
+                model_id = "gemini-2.5-flash-preview-04-17"
+                api_version = "v1beta"  # This model requires v1beta
+                url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_id}:generateContent"
+                print(f"New API endpoint: {url}")
             elif response.status_code == 429:
                 # Rate limit - wait and retry
                 wait_time = min(2 ** retries, 60)  # Exponential backoff up to 60 seconds
@@ -198,11 +272,25 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
                 print(f"Attempted URL: {url}")
                 print(f"Model ID: {model_id}")
                 
-                # Try with a stripped model name as a last resort
-                if "unexpected model name format" in error_message and "/" in model_id:
-                    model_id = model_id.split("/")[-1]
-                    print(f"Trying with simplified model ID: {model_id}")
-                    url = "https://generativelanguage.googleapis.com/v1/models/" + model_id + ":generateContent"
+                # Try the API endpoint with the alternate version (v1 <-> v1beta)
+                if "unexpected model name format" in error_message or "Model not found" in error_message:
+                    if api_version == "v1":
+                        api_version = "v1beta"
+                    else:
+                        api_version = "v1"
+                        
+                    print(f"Trying with alternate API version: {api_version}")
+                    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_id}:generateContent"
+                    print(f"New API endpoint: {url}")
+                    continue
+                
+                # If that doesn't work, try the known working model
+                if retries >= 1:
+                    print("Falling back to known working model: gemini-2.5-flash-preview-04-17")
+                    model_id = "gemini-2.5-flash-preview-04-17"
+                    api_version = "v1beta"  # This model requires v1beta
+                    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_id}:generateContent"
+                    print(f"New API endpoint: {url}")
                     continue
                 
                 raise Exception(f"Gemini API error (400): {error_message}")
@@ -219,7 +307,27 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
         
         retries += 1
     
-    raise Exception(f"Failed to get a valid response from Gemini API after {max_retries} attempts")
+    # Last resort: try the known working model
+    try:
+        print("Final attempt with known working model: gemini-2.5-flash-preview-04-17")
+        model_id = "gemini-2.5-flash-preview-04-17"
+        api_version = "v1beta"
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_id}:generateContent"
+        response = requests.post(url, headers=headers, params=params, json=data)
+        
+        if response.status_code == 200:
+            result = response.json()
+            try:
+                generated_text = result["candidates"][0]["content"]["parts"][0]["text"]
+                return generated_text
+            except (KeyError, IndexError) as e:
+                print(f"Error parsing Gemini response: {e}")
+        else:
+            print(f"Final attempt failed: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Final attempt error: {e}")
+    
+    raise Exception(f"Failed to get a valid response from Gemini API after all attempts")
 
 def enhance_media_search_with_gemini(script, segment_count=5, api_key=None, max_retries=2):
     """Analyze a script and suggest better media search terms for each segment
