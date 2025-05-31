@@ -30,12 +30,28 @@ def generate_voice(text, outputfile, lang):
     return outputfile
 
 async def async_generate_voice(text, outputfile, lang):
+    """Generate voice audio using edge-tts
+    
+    This function uses edge-tts to generate speech audio from text.
+    It works with edge-tts 7.0.2 by using the communicate.save() method.
+    
+    Args:
+        text: The text to convert to speech
+        outputfile: Path to save the audio file
+        lang: Language code for the voice
+    
+    Returns:
+        Path to the generated audio file
+    """
     try:
+        # Create voice manager and select appropriate voice
         voices = await VoicesManager.create()
         if (lang == "en"):
             voice = voices.find(Locale="en-US")
         else:
-            voice = voices.find(Language = lang)
+            voice = voices.find(Language=lang)
+            
+        # Get voice based on multi_speaker setting
         multi = read_config_file()["multi_speaker"]
         if(multi=="yes" or multi=="Yes" or multi=="YES"): 
             speaker = random.choice(voice)["Name"]
@@ -46,19 +62,21 @@ async def async_generate_voice(text, outputfile, lang):
                 speaker = random.choice(voice)["Name"]
                 with open("temp.txt", "w") as file:
                     file.write("speaker = " + speaker)
-                    
+        
+        # Create communicate instance
         communicate = edge_tts.Communicate(text, speaker)
-        submaker = edge_tts.SubMaker()
-        with open(outputfile, "wb") as file:
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    file.write(chunk["data"])
-                elif chunk["type"] == "WordBoundary":
-                    submaker.add(chunk["offset"], chunk["duration"], chunk["text"])
-
+        
+        # Generate audio file
+        await communicate.save(outputfile)
+        
+        # Generate subtitle file (optional - for future use)
+        subtitle_file = os.path.splitext(outputfile)[0] + ".vtt"
+        await communicate.save_subtitles(subtitle_file)
+        
+        print(f"Successfully generated audio: {outputfile}")
+        return outputfile
+        
     except Exception as e:
-        print("Error generating audio using edge_tts", e)
-        raise Exception("An error happened during edge_tts audio generation, no output audio generated", e)
-
-    return outputfile
+        print(f"Error generating audio using edge_tts: {e}")
+        raise Exception(f"An error happened during edge_tts audio generation: {e}")
 

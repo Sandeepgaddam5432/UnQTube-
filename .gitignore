@@ -1,0 +1,20 @@
+# Temp files
+tempfiles/
+temp/
+temp.txt
+
+# Output files
+*.mp4
+*.mp3
+*.wav
+*.vtt
+*.srt
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# Environment files
+.env 
