@@ -23,23 +23,25 @@ https://github.com/amirreza1307/YouTube-video-maker/assets/135555619/3b48b592-b1
 
 # 🚀Run on Google Colab (Recommended)
 
-If you prefer not to install the prerequisites on your local system, you can use the Google Colab notebook. This option is free and requires no installation setup.
+The easiest way to use UnQTube is directly in Google Colab without any local installation:
 
-1. Click on the link to the Google Colab notebook: [https://colab.research.google.com/drive/1Z0Scppdihf2csuUJF20UiuRrHCoCNqIr?usp=sharing](https://colab.research.google.com/drive/1Z0Scppdihf2csuUJF20UiuRrHCoCNqIr?usp=sharing)
-   
-2. First, run "Run Frist" cell to install prerequisites
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sandeepgaddam5432/UnQTube-/blob/main/UnQTube_Colab.ipynb)
 
-3. Now set "Short Video" or "Long Video" cell settings and run it
+1. Click the "Open In Colab" button above to open the UnQTube notebook in Google Colab
+2. Run the cells in sequence:
+   - First cell: Installs system requirements
+   - Second cell: Clones the repository and installs dependencies
+   - Choose either "Long Video" or "Short Video" cell to run
 
-Important : For make short video or intro with video in long video,you need set pexels API (get pexels API from [pexels.com](pexels.com) for free)
+Important: For videos with intro videos or short videos, you'll need a Pexels API key. You can get one for free from [pexels.com](pexels.com).
 
-# 🖥️Running UnQTube on Google Colab
+### Alternative Manual Setup in Colab
 
-Follow these steps to run UnQTube directly on Google Colab:
+If you prefer to set up manually in your own Colab notebook:
 
 1. Open a new Google Colab notebook at [colab.research.google.com](https://colab.research.google.com)
 
-2. Install required system packages (for tkinter support):
+2. Install required system packages:
    ```
    !apt-get update
    !apt-get install -y python3-tk
@@ -60,7 +62,7 @@ Follow these steps to run UnQTube directly on Google Colab:
    !pip install -r requirements.txt
    ```
 
-6. Run the tool (command-line method recommended for Colab):
+6. Run the tool (command-line method for Colab):
    
    For long videos:
    ```
@@ -71,10 +73,6 @@ Follow these steps to run UnQTube directly on Google Colab:
    ```
    !python short.py -topic "your topic here" -time "30" -language "english"
    ```
-
-   **Note**: GUI version (`rungui.py`) is not recommended for Colab as tkinter interfaces cannot display directly in the notebook environment.
-
-7. Important: For videos with intro videos or short videos, you'll need a Pexels API key. You can get one for free from [pexels.com](https://pexels.com)
 
 # 🎥Run on local system
 ## Prerequisites
