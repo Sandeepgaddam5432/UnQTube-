@@ -5,8 +5,8 @@ import requests
 import json
 import hashlib
 
-from lib.APIss import getBingImages, enhance_search_term
-from lib.video_texts import read_config_file
+from lib.media_api import getBingImages, enhance_search_term
+from lib.config_utils import read_config_file
 
 
 def getim(top, paths):

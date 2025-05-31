@@ -55,22 +55,8 @@ def get_videos(title):
     links.append(link)
 
   return links
-
-# AI API using Gemini
-def chatgpt(prompt):
-    """
-    Generate AI text using Gemini (not ChatGPT)
-    This function was renamed for backward compatibility but now exclusively uses Gemini
-    """
-    # Import here to avoid circular imports
-    from lib.gemini_api import generate_script_with_gemini
-    
-    try:
-        return generate_script_with_gemini(prompt)
-    except Exception as e:
-        raise Exception(f"Error generating AI text with Gemini: {e}")
         
-#downlaod any file
+# Download any file
 def download_file(url, save_path):
     response = requests.get(url, stream=True)
     if response.status_code == 200:
@@ -82,7 +68,7 @@ def download_file(url, save_path):
         print("Failed to download the file.")
 
 
-def translateto(text,language):
+def translateto(text, language):
     translator = GoogleTranslator(target=language)
     return translator.translate(text)
 
@@ -113,4 +99,4 @@ def enhance_search_term(term, api_key=None):
         print(f"Error enhancing search term with Gemini: {e}")
     
     # Return original term if enhancement fails
-    return term
+    return term 

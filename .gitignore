@@ -1,8 +1,57 @@
-# Temp files
+# Temporary files and directories
 tempfiles/
-temp/
+*.mp3
+*.mp4
+*.jpg
+*.jpeg
+*.png
+*.avi
+*.mov
+*.mpeg
+*.mpg
+*.wav
+*.vtt
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Sensitive information
 temp.txt
-UnQTube_*.txt
+*api_key*
+*secret*
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
 
 # Output files
 *.mp4
@@ -10,12 +59,6 @@ UnQTube_*.txt
 *.wav
 *.vtt
 *.srt
-
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-.ipynb_checkpoints/
 
 # Environment files
 .env
@@ -33,5 +76,4 @@ ENV/
 *.log
 
 # OS specific files
-.DS_Store
 Thumbs.db 

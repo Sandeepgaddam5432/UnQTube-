@@ -1,0 +1,76 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [
+        {
+          "file_id": "1Z0Scppdihf2csuUJF20UiuRrHCoCNqIr",
+          "timestamp": 1748521726459
+        }
+      ]
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "source": "# @title System Setup\n# Install required system packages\n!apt-get update -qq\n!apt-get install -qq -y python3-tk alsa-utils libasound2-plugins\n\n# Create dummy ALSA config to redirect sound to null device (prevents ALSA errors)\n%%bash\ncat > ~/.asoundrc << 'EOT'\npcm.!default {\n    type null\n}\nctl.!default {\n    type null\n}\nEOT",
+      "metadata": {
+        "id": "KsE3HfJk4r_b",
+        "cellView": "form"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# @title Initialize Dependencies\n",
+        "# Clone repository and install dependencies\n",
+        "import os\n",
+        "if not os.path.exists('/content/UnQTube-'):\n",
+        "  !git clone https://github.com/Sandeepgaddam5432/UnQTube-.git\n",
+        "  %cd /content/UnQTube-/\n",
+        "else:\n",
+        "  %cd /content/UnQTube-/\n",
+        "  !git pull\n",
+        "\n",
+        "# Install all dependencies from requirements.txt\n",
+        "!pip install -r requirements.txt"
+      ],
+      "metadata": {
+        "id": "QdLhnsXk4r_c",
+        "cellView": "form"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": "# @title Long Video\n# @markdown Enter video topic. Example: survival video game\ntopic = \"survival video game\" # @param {type:\"string\"}\n# @markdown general topic you want to make a video about.Example: video game, food, city, person and...\ngeneral_topic = \"video game\" # @param {type:\"string\"}\n# @markdown video time in minute\ntime = \"4\" # @param {type:\"string\"}\n# @markdown do you want intro with video instead photo?\nintro_video = \"no\" # @param [\"yes\",\"no\"]\n# @markdown if yes , get API from www.pexels.com\npexels_api = \"api\" # @param {type:\"string\"}\n# @markdown video language\nlanguage = \"english\" # @param [\"persian\", \"english\", \"arabic\", \"vietnamese\", \"zulu\", \"afrikaans\", \"amharic\", \"azerbaijani\", \"bulgarian\", \"bengali\", \"bosnian\", \"catalan\", \"czech\", \"welsh\", \"danish\", \"german\", \"greek\", \"spanish\", \"estonian\", \"filipino\", \"finnish\", \"french\", \"irish\", \"galician\", \"gujarati\", \"hebrew\", \"hindi\", \"croatian\", \"hungarian\", \"indonesian\", \"icelandic\", \"italian\", \"japanese\", \"javanese\", \"georgian\", \"kazakh\", \"khmer\", \"kannada\", \"korean\", \"lao\", \"lithuanian\", \"latvian\", \"macedonian\", \"malayalam\", \"mongolian\", \"marathi\", \"malay\", \"maltese\", \"burmese\", \"norwegian\", \"nepali\", \"dutch\", \"polish\", \"pashto\", \"portuguese\", \"romanian\", \"russian\", \"sinhala\", \"slovak\", \"slovenian\", \"somali\", \"albanian\", \"serbian\", \"sundanese\", \"swedish\", \"swahili\", \"tamil\", \"telugu\", \"thai\", \"turkish\", \"ukrainian\", \"urdu\", \"uzbek\"]\n# @markdown Use multiple speakers in video\nmulti_speaker = \"no\" # @param [\"yes\",\"no\"]\n\n# @markdown Use Gemini API for enhanced script generation (optional)\nGEMINI_API_KEY = \"\" #@param {type:\"string\"}\n\n# Update config.txt with Gemini API Key from form\ngemini_api_key_from_form = GEMINI_API_KEY # Gets value from the form field\nif gemini_api_key_from_form:\n    print(f\"Attempting to update config.txt with Gemini API Key: {gemini_api_key_from_form[:5]}...\") # Print first 5 chars for verification\n    config_path = \"/content/UnQTube-/config.txt\"\n    try:\n        with open(config_path, \"r\") as f_read:\n            lines = f_read.readlines()\n        \n        updated_lines = []\n        key_updated = False\n        gemini_enabled = False\n\n        for line in lines:\n            stripped_line = line.strip()\n            if stripped_line.startswith(\"gemini_api\"):\n                updated_lines.append(f\"gemini_api = {gemini_api_key_from_form}\\n\")\n                key_updated = True\n            elif stripped_line.startswith(\"use_gemini\"):\n                updated_lines.append(\"use_gemini = yes\\n\")\n                gemini_enabled = True\n            else:\n                updated_lines.append(line)\n        \n        # If keys were not in original file, add them\n        if not key_updated:\n            updated_lines.append(f\"gemini_api = {gemini_api_key_from_form}\\n\")\n        if not gemini_enabled:\n            updated_lines.append(\"use_gemini = yes\\n\")\n\n        with open(config_path, \"w\") as f_write:\n            f_write.writelines(updated_lines)\n        print(f\"Successfully updated {config_path} with Gemini API Key and set use_gemini to yes.\")\n\n    except FileNotFoundError:\n        print(f\"ERROR: {config_path} not found. Cannot update Gemini API Key.\")\n    except Exception as e:\n        print(f\"ERROR: Could not update {config_path}. Error: {e}\")\nelse:\n    # Ensure Gemini is disabled if no key is provided\n    print(\"No Gemini API Key provided in the form. Ensuring Gemini is disabled in config.\")\n    config_path = \"/content/UnQTube-/config.txt\"\n    try:\n        with open(config_path, \"r\") as f_read:\n            lines = f_read.readlines()\n        \n        updated_lines = []\n        for line in lines:\n            stripped_line = line.strip()\n            if stripped_line.startswith(\"gemini_api\"):\n                updated_lines.append(\"gemini_api = \\n\") \n            elif stripped_line.startswith(\"use_gemini\"):\n                updated_lines.append(\"use_gemini = no\\n\")\n            else:\n                updated_lines.append(line)\n        \n        with open(config_path, \"w\") as f_write:\n            f_write.writelines(updated_lines)\n        print(f\"Updated {config_path}: Cleared Gemini API key and set use_gemini to no.\")\n    except Exception as e:\n        print(f\"ERROR: Could not update {config_path} to disable Gemini. Error: {e}\")\n\n!python video.py -topic \"$topic\" -general_topic \"$general_topic\" -time \"$time\" -intro_video \"$intro_video\" -pexels_api \"$pexels_api\" -language \"$language\" -multi_speaker \"$multi_speaker\"",
+      "metadata": {
+        "cellView": "form",
+        "id": "bBcsxIdM1Lp7"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": "# @title Short Video\n# @markdown Enter video topic. Example: survival video game\ntopic = \"Cooking secrets\" # @param {type:\"string\"}\n# @markdown video time in second\ntime = \"40\" # @param {type:\"string\"}\n# @markdown video language\nlanguage = \"english\" # @param [\"persian\", \"english\", \"arabic\", \"vietnamese\", \"zulu\", \"afrikaans\", \"amharic\", \"azerbaijani\", \"bulgarian\", \"bengali\", \"bosnian\", \"catalan\", \"czech\", \"welsh\", \"danish\", \"german\", \"greek\", \"spanish\", \"estonian\", \"filipino\", \"finnish\", \"french\", \"irish\", \"galician\", \"gujarati\", \"hebrew\", \"hindi\", \"croatian\", \"hungarian\", \"indonesian\", \"icelandic\", \"italian\", \"japanese\", \"javanese\", \"georgian\", \"kazakh\", \"khmer\", \"kannada\", \"korean\", \"lao\", \"lithuanian\", \"latvian\", \"macedonian\", \"malayalam\", \"mongolian\", \"marathi\", \"malay\", \"maltese\", \"burmese\", \"norwegian\", \"nepali\", \"dutch\", \"polish\", \"pashto\", \"portuguese\", \"romanian\", \"russian\", \"sinhala\", \"slovak\", \"slovenian\", \"somali\", \"albanian\", \"serbian\", \"sundanese\", \"swedish\", \"swahili\", \"tamil\", \"telugu\", \"thai\", \"turkish\", \"ukrainian\", \"urdu\", \"uzbek\"]\n# @markdown Use multiple speakers in video\nmulti_speaker = \"no\" # @param [\"yes\",\"no\"]\n# @markdown get API from www.pexels.com\npexels_api = \"api\" # @param {type:\"string\"}\n\n# @markdown Use Gemini API for enhanced script generation (optional)\nGEMINI_API_KEY = \"\" #@param {type:\"string\"}\n\n# Update config.txt with Gemini API Key from form\ngemini_api_key_from_form = GEMINI_API_KEY # Gets value from the form field\nif gemini_api_key_from_form:\n    print(f\"Attempting to update config.txt with Gemini API Key: {gemini_api_key_from_form[:5]}...\") # Print first 5 chars for verification\n    config_path = \"/content/UnQTube-/config.txt\"\n    try:\n        with open(config_path, \"r\") as f_read:\n            lines = f_read.readlines()\n        \n        updated_lines = []\n        key_updated = False\n        gemini_enabled = False\n\n        for line in lines:\n            stripped_line = line.strip()\n            if stripped_line.startswith(\"gemini_api\"):\n                updated_lines.append(f\"gemini_api = {gemini_api_key_from_form}\\n\")\n                key_updated = True\n            elif stripped_line.startswith(\"use_gemini\"):\n                updated_lines.append(\"use_gemini = yes\\n\")\n                gemini_enabled = True\n            else:\n                updated_lines.append(line)\n        \n        # If keys were not in original file, add them\n        if not key_updated:\n            updated_lines.append(f\"gemini_api = {gemini_api_key_from_form}\\n\")\n        if not gemini_enabled:\n            updated_lines.append(\"use_gemini = yes\\n\")\n\n        with open(config_path, \"w\") as f_write:\n            f_write.writelines(updated_lines)\n        print(f\"Successfully updated {config_path} with Gemini API Key and set use_gemini to yes.\")\n\n    except FileNotFoundError:\n        print(f\"ERROR: {config_path} not found. Cannot update Gemini API Key.\")\n    except Exception as e:\n        print(f\"ERROR: Could not update {config_path}. Error: {e}\")\nelse:\n    # Ensure Gemini is disabled if no key is provided\n    print(\"No Gemini API Key provided in the form. Ensuring Gemini is disabled in config.\")\n    config_path = \"/content/UnQTube-/config.txt\"\n    try:\n        with open(config_path, \"r\") as f_read:\n            lines = f_read.readlines()\n        \n        updated_lines = []\n        for line in lines:\n            stripped_line = line.strip()\n            if stripped_line.startswith(\"gemini_api\"):\n                updated_lines.append(\"gemini_api = \\n\") \n            elif stripped_line.startswith(\"use_gemini\"):\n                updated_lines.append(\"use_gemini = no\\n\")\n            else:\n                updated_lines.append(line)\n        \n        with open(config_path, \"w\") as f_write:\n            f_write.writelines(updated_lines)\n        print(f\"Updated {config_path}: Cleared Gemini API key and set use_gemini to no.\")\n    except Exception as e:\n        print(f\"ERROR: Could not update {config_path} to disable Gemini. Error: {e}\")\n\n!python short.py -topic \"$topic\" -time \"$time\" -language \"$language\" -multi_speaker \"$multi_speaker\" -pexels_api \"$pexels_api\"",
+      "metadata": {
+        "id": "2H5MJ0ZV61DD",
+        "cellView": "form"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}

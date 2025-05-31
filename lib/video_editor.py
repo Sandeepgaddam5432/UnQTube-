@@ -5,9 +5,9 @@ import cv2
 import os
 import requests
 
-from lib.APIss import get_videos,download_file,enhance_search_term
+from lib.media_api import get_videos,download_file,enhance_search_term
 from lib.image_procces import resize_and_add_borders
-from lib.video_texts import read_config_file
+from lib.config_utils import read_config_file
 from lib.image_procces import getim,delete_invalid_images,sortimage,shape_error
 
 def create_video_with_images_and_audio(image_folder, audio_file, text, audio_volume=1.0):

@@ -7,42 +7,35 @@ from moviepy.editor import VideoFileClip, concatenate_videoclips, AudioFileClip,
 
 from lib.video_texts import getyamll, read_random_line
 from lib.config_utils import read_config_file
-from lib.APIss import download_file, chatgpt, translateto, enhance_search_term
+from lib.media_api import download_file, translateto
 from lib.voices import generate_voice
 from lib.language import get_language_code
 from lib.core import get_temp_dir
+from lib.gemini_api import generate_short_video_script
 
-def get_video(prompt,videoname):
-    # Check if we should use Gemini to enhance the video search
-    use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
-    
-    if use_gemini:
-        # Enhance the search prompt using Gemini
-        enhanced_prompt = enhance_search_term(prompt)
-        print(f"Using Gemini-enhanced video search: '{enhanced_prompt}'")
-        search_prompt = enhanced_prompt
-    else:
-        search_prompt = prompt
-    
+def get_video(prompt, videoname):
+    """Download stock video based on search prompt"""
     url = "https://api.pexels.com/videos/search"
     headers = {
         "Authorization": read_config_file()["pexels_api"]
     }
     params = {
-        "query": search_prompt,
+        "query": prompt,
         "per_page": 1
     }
 
     response = requests.get(url, headers=headers, params=params)
     json_data = response.json()
 
+    try:
+        link = json_data['videos'][0]['video_files'][0]['link']
+        download_file(link, videoname)
+    except (KeyError, IndexError, ValueError) as e:
+        print(f"Error getting video for '{prompt}': {e}")
+        raise Exception(f"Unable to find a suitable video for '{prompt}'")
 
-    link = json_data['videos'][0]['video_files'][0]['link']
 
-    download_file(link,videoname)
-
-
-def resize_and_text(videopath,targetwidth=1080,targetheight=1920):
+def resize_and_text(videopath, targetwidth=1080, targetheight=1920):
     video_clip = VideoFileClip(videopath+".mp4")
     width = video_clip.size[0]
     height = video_clip.size[1]
@@ -77,48 +70,73 @@ def resize_and_text(videopath,targetwidth=1080,targetheight=1920):
     return video_clip
 
 
-def final_video(title,time,language,multi_speaker):
+def final_video(title, time, language, multi_speaker):
+    """Create a short video using Gemini for script generation"""
     temp_dir = get_temp_dir()
     os.makedirs(temp_dir, exist_ok=True)
     
     print("--------------------------------")
-    print(title + " in " + time + " second"+", "+language+", multi speaker : "+multi_speaker)
-    print("--------------------------------")
-    original_text = chatgpt(getyamll("short_prompt")).format(title=title,time=time)
-    print(original_text)
+    print(f"{title} in {time} seconds, {language}, multi speaker: {multi_speaker}")
     print("--------------------------------")
     
-    # Use absolute paths for temp directory
+    # Generate the script using Gemini's structured output
+    script_data = generate_short_video_script(title, int(time), language)
+    
+    if not script_data or not "scenes" in script_data or len(script_data["scenes"]) == 0:
+        print("Error: Could not generate a valid script structure")
+        return
+    
+    # Display the generated script data
+    print(f"Generated script with {len(script_data['scenes'])} scenes")
+    if "title" in script_data:
+        print(f"Video title: {script_data['title']}")
+    print("--------------------------------")
+    
+    # Download background music
     song_file = os.path.join(temp_dir, "song.mp3")
     download_file(read_random_line("download_list/background_music.txt"), song_file)
     
-    videoprompts = re.findall(r'\[([^\]]+)\]', original_text)
-    if "Text" in original_text:
-        texts = re.findall(r'Text:\s+"([^"]+)"', original_text)
-    else:
-        texts = re.findall(r'text:\s+"([^"]+)"', original_text)
-    print(videoprompts)
-    print(texts)
-    print("--------------------------------")
-    
+    # Process each scene
     videos = []
     i = 0
     
-    for text,prompt in zip(texts,videoprompts):
+    for scene in script_data["scenes"]:
         video_file = os.path.join(temp_dir, f"{i}.mp4")
         audio_file = os.path.join(temp_dir, f"{i}.mp3")
         
-        get_video(prompt, video_file)
-        print("video download")
+        # Get search terms for video
+        if "search_terms" in scene and scene["search_terms"]:
+            search_term = scene["search_terms"][0]
+        else:
+            # Fall back to visual description if no search terms
+            search_term = scene["visual_description"] if "visual_description" in scene else title
+            
+        print(f"Scene {i+1}: {search_term}")
+        print(f"Text: {scene.get('text', '')}")
         
-        generate_voice(translateto(text,get_language_code(language)), audio_file, get_language_code(language))
-        print("speech make")
-        
-        # Pass just the base path without extension to resize_and_text
-        video_base_path = os.path.join(temp_dir, str(i))
-        videos.append(resize_and_text(video_base_path))
-        i+=1
+        try:
+            get_video(search_term, video_file)
+            print("Video downloaded")
+            
+            # Generate speech from the text
+            scene_text = scene.get("text", f"Scene {i+1} for {title}")
+            generate_voice(translateto(scene_text, get_language_code(language)), 
+                          audio_file, get_language_code(language))
+            print("Speech generated")
+            
+            # Pass just the base path without extension to resize_and_text
+            video_base_path = os.path.join(temp_dir, str(i))
+            videos.append(resize_and_text(video_base_path))
+            i+=1
+        except Exception as e:
+            print(f"Error processing scene {i+1}: {e}")
+            # Continue to next scene if one fails
 
+    if not videos:
+        print("Error: No valid video segments could be created")
+        return
+        
+    # Combine all videos
     final_video = concatenate_videoclips(videos)
     audio_clip = AudioFileClip(song_file)
     if final_video.duration < audio_clip.duration:
