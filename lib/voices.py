@@ -33,7 +33,8 @@ async def async_generate_voice(text, outputfile, lang):
     """Generate voice audio using edge-tts
     
     This function uses edge-tts to generate speech audio from text.
-    It works with edge-tts 7.0.2 by using the communicate.save() method.
+    It works with edge-tts 7.0.2 by creating separate Communicate instances
+    for audio and subtitle generation.
     
     Args:
         text: The text to convert to speech
@@ -52,8 +53,8 @@ async def async_generate_voice(text, outputfile, lang):
             voice = voices.find(Language=lang)
             
         # Get voice based on multi_speaker setting
-        multi = read_config_file()["multi_speaker"]
-        if(multi=="yes" or multi=="Yes" or multi=="YES"): 
+        multi = read_config_file().get("multi_speaker", "no").lower()
+        if multi in ["yes", "true", "1"]: 
             speaker = random.choice(voice)["Name"]
         else:      
             try:
@@ -63,37 +64,42 @@ async def async_generate_voice(text, outputfile, lang):
                 with open("temp.txt", "w") as file:
                     file.write("speaker = " + speaker)
         
-        # Create communicate instance
-        communicate = edge_tts.Communicate(text, speaker)
+        # Generate audio file using the first Communicate instance
+        audio_communicate = edge_tts.Communicate(text, speaker)
+        await audio_communicate.save(outputfile)
+        print(f"Successfully generated audio: {outputfile}")
         
-        # Generate audio file
-        await communicate.save(outputfile)
-        
-        # Generate subtitle file
-        # In edge-tts 7.0.2, we need to use the stream() method to generate subtitles
-        # because save_subtitles() doesn't exist
+        # Generate subtitle file using a SEPARATE Communicate instance
         subtitle_file = os.path.splitext(outputfile)[0] + ".vtt"
-        
         try:
-            # Manually create subtitle file using the stream() output
+            # Create a new Communicate instance specifically for subtitles
+            subtitle_communicate = edge_tts.Communicate(text, speaker)
+            
+            # Create subtitle file using the new stream
             with open(subtitle_file, 'w', encoding='utf-8') as f:
                 f.write("WEBVTT\n\n")
                 
-                async for chunk in communicate.stream():
+                # Collect subtitle data from the stream
+                subtitle_data = []
+                async for chunk in subtitle_communicate.stream():
                     if chunk["type"] == "WordBoundary":
-                        # Format: 00:00:00.000 --> 00:00:01.000
-                        start_time = format_timestamp(chunk["offset"] / 10000000)
-                        end_time = format_timestamp((chunk["offset"] + chunk["duration"]) / 10000000)
-                        
-                        f.write(f"{start_time} --> {end_time}\n")
-                        f.write(f"{chunk['text']}\n\n")
+                        # Store the chunk for subtitle processing
+                        subtitle_data.append(chunk)
                 
+                # Process all subtitle chunks
+                for chunk in subtitle_data:
+                    # Format: 00:00:00.000 --> 00:00:01.000
+                    start_time = format_timestamp(chunk["offset"] / 10000000)
+                    end_time = format_timestamp((chunk["offset"] + chunk["duration"]) / 10000000)
+                    
+                    f.write(f"{start_time} --> {end_time}\n")
+                    f.write(f"{chunk['text']}\n\n")
+            
             print(f"Successfully generated subtitles: {subtitle_file}")
         except Exception as subtitle_error:
             print(f"Warning: Could not generate subtitles: {subtitle_error}")
             # Continue execution even if subtitle generation fails
         
-        print(f"Successfully generated audio: {outputfile}")
         return outputfile
         
     except Exception as e:

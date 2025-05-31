@@ -26,7 +26,7 @@ def list_available_gemini_models(api_key=None):
         api_key: Optional Gemini API key, if not provided will try to get from env/config
         
     Returns:
-        A list of available model names
+        A list of available model names with the "models/" prefix
     """
     if not api_key:
         api_key = get_gemini_key()
@@ -34,7 +34,7 @@ def list_available_gemini_models(api_key=None):
     if not api_key:
         print("Warning: No API key provided. Cannot list available models.")
         # Return some default models that are likely available
-        return ["gemini-pro", "gemini-1.0-pro", "gemini-1.0-pro-vision"]
+        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.0-pro-vision"]
         
     url = f"https://generativelanguage.googleapis.com/v1/models"
     
@@ -48,7 +48,7 @@ def list_available_gemini_models(api_key=None):
         if response.status_code != 200:
             print(f"Error listing models: {response.status_code} - {response.text}")
             # Return some default models as fallback
-            return ["gemini-pro", "gemini-1.0-pro", "gemini-1.0-pro-vision"]
+            return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.0-pro-vision"]
             
         result = response.json()
         
@@ -56,32 +56,33 @@ def list_available_gemini_models(api_key=None):
         models = []
         for model in result.get("models", []):
             name = model.get("name", "")
-            # The name comes in format "models/gemini-pro" - we'll strip the "models/" prefix
-            if name.startswith("models/"):
-                name = name[7:]  # Remove "models/" prefix
+            # Keep the full name including "models/" prefix
             if "gemini" in name.lower() and "generateContent" in model.get("supportedGenerationMethods", []):
                 models.append(name)
                 
         if not models:
             print("Warning: No Gemini models found for text generation")
             # Return default models as fallback
-            return ["gemini-pro", "gemini-1.0-pro"]
+            return ["models/gemini-pro", "models/gemini-1.0-pro"]
             
         return models
     except Exception as e:
         print(f"Error fetching available models: {e}")
         # Return default models as fallback
-        return ["gemini-pro", "gemini-1.0-pro", "gemini-1.0-pro-vision"]
+        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.0-pro-vision"]
 
 def get_gemini_model():
     """Get the selected Gemini model from config file or use default"""
     try:
-        model = read_config_file().get('gemini_model', 'gemini-pro')
+        model = read_config_file().get('gemini_model', 'models/gemini-pro')
+        # Ensure model has the required "models/" prefix
+        if not model.startswith("models/"):
+            model = f"models/{model}"
         return model
     except Exception as e:
         print(f"Warning: Could not read model from config: {e}")
         # Default to a stable model if not specified
-        return 'gemini-pro'
+        return 'models/gemini-pro'
 
 def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
     """Generate script using Gemini API
@@ -103,7 +104,7 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
     # Get model from config or use default
     model_name = get_gemini_model()
     
-    # Add "models/" prefix if not present - this is required by the API
+    # Ensure model has the required "models/" prefix
     if not model_name.startswith("models/"):
         model_name = f"models/{model_name}"
     
