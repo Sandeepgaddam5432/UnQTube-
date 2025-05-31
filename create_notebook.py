@@ -1,26 +1,15 @@
-{
-  "nbformat": 4,
-  "nbformat_minor": 0,
-  "metadata": {
-    "colab": {
-      "provenance": []
-    },
-    "kernelspec": {
-      "name": "python3",
-      "display_name": "Python 3"
-    },
-    "language_info": {
-      "name": "python"
-    }
-  },
-  "cells": [
-    {
-      "cell_type": "code",
-      "metadata": {
+#!/usr/bin/env python3
+import json
+import os
+
+# Define the cells
+system_setup_cell = {
+    "cell_type": "code",
+    "metadata": {
         "id": "KsE3HfJk4r_b",
         "cellView": "form"
-      },
-      "source": [
+    },
+    "source": [
         "# @title System Setup\n",
         "# Install required system packages\n",
         "print(\"Starting system setup...\")\n",
@@ -60,17 +49,18 @@
         "!chmod 700 /tmp/runtime-root\n",
         "\n",
         "print(\"System setup complete.\")"
-      ],
-      "execution_count": null,
-      "outputs": []
-    },
-    {
-      "cell_type": "code",
-      "metadata": {
+    ],
+    "execution_count": None,
+    "outputs": []
+}
+
+dependencies_cell = {
+    "cell_type": "code",
+    "metadata": {
         "id": "QdLhnsXk4r_c",
         "cellView": "form"
-      },
-      "source": [
+    },
+    "source": [
         "# @title Initialize Dependencies\n",
         "\n",
         "# @markdown Enter your Gemini API key (optional - you can also enter it in the next cells)\n",
@@ -99,17 +89,18 @@
         "print(\"After restarting, re-run all cells from the beginning.\")\n",
         "print(\"=\"*80)\n",
         "print(\"\\n\\n\")"
-      ],
-      "execution_count": null,
-      "outputs": []
-    },
-    {
-      "cell_type": "code",
-      "metadata": {
+    ],
+    "execution_count": None,
+    "outputs": []
+}
+
+gemini_config_cell = {
+    "cell_type": "code",
+    "metadata": {
         "id": "fkX3mjWK72G1",
         "cellView": "form"
-      },
-      "source": [
+    },
+    "source": [
         "# @title Check and Configure Gemini\n",
         "\n",
         "# Check if the Gemini API module is installed and working\n",
@@ -147,17 +138,18 @@
         "    print(f\"Error importing Gemini module: {e}\")\n",
         "    print(\"This is expected if you just installed the dependencies and need to restart the runtime.\")\n",
         "    print(\"Please follow the instructions from the previous cell to restart the runtime.\")"
-      ],
-      "execution_count": null,
-      "outputs": []
-    },
-    {
-      "cell_type": "code",
-      "metadata": {
+    ],
+    "execution_count": None,
+    "outputs": []
+}
+
+long_video_cell = {
+    "cell_type": "code",
+    "metadata": {
         "id": "bBcsxIdM1Lp7",
         "cellView": "form"
-      },
-      "source": [
+    },
+    "source": [
         "# @title Long Video\n",
         "\n",
         "# Get available models from previous cell or use defaults\n",
@@ -288,17 +280,18 @@
         "        print(f\"\\nTo download the video, use the three-dot menu in the file browser panel and select '{video_path}'\")\n",
         "else:\n",
         "    print(\"\\n\\nNo video file was generated. Check the output above for errors.\")"
-      ],
-      "execution_count": null,
-      "outputs": []
-    },
-    {
-      "cell_type": "code",
-      "metadata": {
+    ],
+    "execution_count": None,
+    "outputs": []
+}
+
+short_video_cell = {
+    "cell_type": "code",
+    "metadata": {
         "id": "2H5MJ0ZV61DD",
         "cellView": "form"
-      },
-      "source": [
+    },
+    "source": [
         "# @title Short Video\n",
         "\n",
         "# Get available models from previous cell or use defaults\n",
@@ -422,9 +415,38 @@
         "        print(f\"\\nTo download the video, use the three-dot menu in the file browser panel and select '{output_file}'\")\n",
         "else:\n",
         "    print(\"\\n\\nNo video file was generated. Check the output above for errors.\")"
-      ],
-      "execution_count": null,
-      "outputs": []
-    }
-  ]
+    ],
+    "execution_count": None,
+    "outputs": []
 }
+
+# Create notebook structure
+notebook = {
+    "nbformat": 4,
+    "nbformat_minor": 0,
+    "metadata": {
+        "colab": {
+            "provenance": []
+        },
+        "kernelspec": {
+            "name": "python3",
+            "display_name": "Python 3"
+        },
+        "language_info": {
+            "name": "python"
+        }
+    },
+    "cells": [
+        system_setup_cell,
+        dependencies_cell,
+        gemini_config_cell,
+        long_video_cell,
+        short_video_cell
+    ]
+}
+
+# Save notebook
+with open('UnQTube_Colab.ipynb', 'w') as f:
+    json.dump(notebook, f, indent=2)
+
+print("Enhanced notebook created successfully as UnQTube_Colab.ipynb") 
