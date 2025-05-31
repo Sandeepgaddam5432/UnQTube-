@@ -2,6 +2,7 @@ import os
 import requests
 import json
 import time
+import re
 from lib.config_utils import read_config_file
 
 def get_gemini_key():
@@ -611,4 +612,211 @@ def _create_fallback_short_video_script(topic, scene_count=5):
     return {
         "title": f"Short video about {topic}",
         "scenes": scenes
+    }
+
+def generate_complete_top10_content(title, genre="", language="english", api_key=None, max_retries=2):
+    """
+    Generate a complete top 10 video script including all content in a single API call
+    
+    Args:
+        title: The main topic for the top 10 list
+        genre: Optional genre/category for additional context
+        language: The language to generate the script in
+        api_key: Optional Gemini API key
+        max_retries: Maximum number of retries on failure
+        
+    Returns:
+        A dictionary containing:
+        - intro: Intro text
+        - items: List of the 10 items
+        - segments: Array of segment data objects with script and search_terms
+        - outro: Outro text
+    """
+    if not api_key:
+        api_key = get_gemini_key()
+    
+    # Prepare a comprehensive prompt to get all content at once
+    prompt = f"""
+    I need a complete script for a top 10 video about "{title}"{' related to ' + genre if genre else ''}.
+    
+    Please generate all the following content at once in a single structured JSON response:
+    
+    1. An intro text that introduces the topic
+    2. A list of the 10 best items for this topic
+    3. Detailed content for each of the 10 items
+    4. An outro text thanking viewers and asking them to like and subscribe
+    
+    OUTPUT FORMAT:
+    Return the content as a JSON object with these fields:
+    - "intro": An engaging introduction text (3-4 sentences)
+    - "items": Array of 10 item titles
+    - "segments": Array of 10 objects (one per item) with:
+      - "script": The script text explaining this item (3-4 sentences)
+      - "search_terms": Array of 2-3 visual search terms for finding imagery/video
+    - "outro": A brief conclusion thanking viewers (1-2 sentences)
+    
+    Example structure (simplified):
+    {{
+      "intro": "Welcome to our top 10 video about...",
+      "items": ["First item", "Second item", ...],
+      "segments": [
+        {{
+          "script": "Our first item is...",
+          "search_terms": ["term1", "term2"]
+        }},
+        ...
+      ],
+      "outro": "Thanks for watching..."
+    }}
+    
+    Make each item genuinely informative with interesting facts.
+    For search terms, be specific and descriptive for better visuals.
+    Language: {language}
+    """
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Generating complete top 10 content for '{title}' in a single API call...")
+            response = generate_script_with_gemini(prompt, api_key)
+            
+            try:
+                # Extract the JSON response
+                if "```json" in response:
+                    json_text = response.split("```json")[1].split("```")[0].strip()
+                elif "```" in response:
+                    json_text = response.split("```")[1].strip()
+                else:
+                    json_text = response.strip()
+                    
+                content_data = json.loads(json_text)
+                
+                # Validate required fields
+                if "intro" not in content_data:
+                    content_data["intro"] = f"Welcome to our top ten video about {title}. Today, we're going to explore the most fascinating aspects of this topic. If you enjoy this content, please like and subscribe."
+                
+                if "items" not in content_data or not content_data["items"] or len(content_data["items"]) < 10:
+                    print("Warning: Incomplete or missing items list in response")
+                    # Create or pad items list
+                    if "items" not in content_data or not content_data["items"]:
+                        content_data["items"] = [f"Item {i+1} for {title}" for i in range(10)]
+                    elif len(content_data["items"]) < 10:
+                        current_length = len(content_data["items"])
+                        content_data["items"].extend([f"Item {current_length + i + 1} for {title}" for i in range(10 - current_length)])
+                
+                if "segments" not in content_data or not content_data["segments"] or len(content_data["segments"]) < 10:
+                    print("Warning: Incomplete or missing segments in response")
+                    # Create or pad segments
+                    if "segments" not in content_data or not content_data["segments"]:
+                        content_data["segments"] = []
+                    
+                    # Generate segments for each item
+                    items = content_data["items"]
+                    for i in range(len(content_data["segments"]), 10):
+                        item_text = items[i] if i < len(items) else f"Item {i+1}"
+                        content_data["segments"].append({
+                            "script": f"Number {i+1} on our list is {item_text}. This is an excellent example of {title} that stands out for its unique qualities.",
+                            "search_terms": [f"{item_text} {genre}", f"{item_text} {title}"]
+                        })
+                
+                if "outro" not in content_data:
+                    content_data["outro"] = f"Thanks for watching our video about {title}. If you enjoyed it, please hit the like button and subscribe to our channel for more content like this!"
+                
+                print(f"✓ Successfully generated complete top 10 content in a single API call")
+                return content_data
+                
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"Error parsing JSON response: {e}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying... (attempt {attempt+1}/{max_retries})")
+                    time.sleep(2)
+                else:
+                    # Attempt to extract useful data from text response
+                    print("Attempting to extract content from non-JSON response...")
+                    return _extract_top10_content_from_text(response, title, genre)
+        except Exception as e:
+            print(f"Error generating complete top 10 content: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying... (attempt {attempt+1}/{max_retries})")
+                time.sleep(2)
+            else:
+                # Create fallback content
+                return _create_fallback_top10_content(title, genre)
+    
+    # This should not be reached due to the else clauses above, but just in case
+    return _create_fallback_top10_content(title, genre)
+
+def _extract_top10_content_from_text(response, title, genre):
+    """Extract content from a non-JSON text response"""
+    try:
+        # Initialize with defaults
+        content = {
+            "intro": f"Welcome to our top ten video about {title}.",
+            "items": [f"Item {i+1}" for i in range(10)],
+            "segments": [],
+            "outro": f"Thanks for watching our video about {title}. If you enjoyed it, please like and subscribe!"
+        }
+        
+        # Try to find intro
+        intro_match = re.search(r'"intro":\s*"([^"]+)"', response)
+        if intro_match:
+            content["intro"] = intro_match.group(1)
+            
+        # Try to find items
+        items_section = re.search(r'"items":\s*\[(.*?)\]', response, re.DOTALL)
+        if items_section:
+            items_text = items_section.group(1)
+            items = re.findall(r'"([^"]+)"', items_text)
+            if items and len(items) > 0:
+                content["items"] = items[:10]  # Take up to 10 items
+                if len(items) < 10:
+                    content["items"].extend([f"Item {len(items) + i + 1}" for i in range(10 - len(items))])
+        
+        # Try to find segments
+        segments_section = re.search(r'"segments":\s*\[(.*?)\]', response, re.DOTALL)
+        if segments_section:
+            segments_text = segments_section.group(1)
+            script_patterns = re.findall(r'"script":\s*"([^"]+)"', segments_text)
+            
+            # Build segments
+            for i, script in enumerate(script_patterns[:10]):
+                item = content["items"][i] if i < len(content["items"]) else f"Item {i+1}"
+                content["segments"].append({
+                    "script": script,
+                    "search_terms": [f"{item} {genre}", f"{item} {title}"]
+                })
+        
+        # Fill any missing segments
+        for i in range(len(content["segments"]), 10):
+            item = content["items"][i] if i < len(content["items"]) else f"Item {i+1}"
+            content["segments"].append({
+                "script": f"Number {i+1} on our list is {item}. This is an excellent example of {title}.",
+                "search_terms": [f"{item} {genre}", f"{item} {title}"]
+            })
+            
+        # Try to find outro
+        outro_match = re.search(r'"outro":\s*"([^"]+)"', response)
+        if outro_match:
+            content["outro"] = outro_match.group(1)
+            
+        return content
+    except Exception as e:
+        print(f"Error extracting content from text: {e}")
+        return _create_fallback_top10_content(title, genre)
+    
+def _create_fallback_top10_content(title, genre):
+    """Create fallback content when all else fails"""
+    items = [f"Item {i+1} for {title}" for i in range(10)]
+    segments = []
+    
+    for i, item in enumerate(items):
+        segments.append({
+            "script": f"Number {i+1} on our list is {item}. This is an excellent example of {title} that stands out for its unique qualities.",
+            "search_terms": [f"{item} {genre}", f"{item} {title}"]
+        })
+    
+    return {
+        "intro": f"Welcome to our top ten video about {title}. Today, we're going to explore the most fascinating aspects of this topic. If you enjoy this content, please like and subscribe.",
+        "items": items,
+        "segments": segments,
+        "outro": f"Thanks for watching our video about {title}. If you enjoyed it, please hit the like button and subscribe to our channel for more content like this!"
     } 

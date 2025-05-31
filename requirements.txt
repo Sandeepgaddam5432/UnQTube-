@@ -8,3 +8,4 @@ argparse
 deep-translator
 pyyaml
 opencv-python
+pydub

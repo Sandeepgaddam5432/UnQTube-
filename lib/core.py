@@ -2,6 +2,7 @@ import os
 import shutil
 import sys
 import traceback
+import time
 
 from lib.video_texts import get_names, process_text, getyamll, read_random_line, get_item_content, get_intro_text
 from lib.config_utils import read_config_file
@@ -10,7 +11,7 @@ from lib.media_api import download_file, translateto, enhance_search_term, get_v
 from lib.video_editor import mergevideo
 from lib.voices import generate_voice
 from lib.language import get_language_code
-from lib.gemini_api import generate_script_with_gemini
+from lib.gemini_api import generate_script_with_gemini, generate_complete_top10_content
 
 def get_temp_dir():
     """Get the appropriate tempfiles directory path based on environment"""
@@ -222,12 +223,15 @@ def delete_directories_and_file(start, end, base_directory=None):
 def making_video(title, genre=""):
     """Main function to create a top 10 video"""
     output_file = "UnQTube_" + title.replace(" ", "_") + ".mp4"
+    if os.path.exists('/content'):
+        output_file = os.path.join('/content', output_file)
+        
     temp_dir = get_temp_dir()
     
     # Save cleanup function for finally block
     def cleanup():
         try:
-            print("Running cleanup...")
+            print("\n----- Running cleanup -----")
             if os.path.exists("temp.txt"):
                 os.remove("temp.txt")
             delete_directories_and_file(0, 11)
@@ -243,13 +247,15 @@ def making_video(title, genre=""):
             if not genre:  # Only use default if no genre was provided as parameter
                 genre = "video"  # Default genre
         
-        print("--------------------------")
-        print(f"Creating video for: {title}")
+        print("\n====== STARTING TOP 10 VIDEO CREATION ======")
+        print(f"Topic: {title}")
         print(f"Genre: {genre}")
-        print("--------------------------")
+        print(f"Output file will be: {output_file}")
+        print("==========================================")
         
         # Get the top 10 list using Gemini
         try:
+            print("\n----- Generating top 10 list with Gemini -----")
             top10 = get_names(title)
             if not top10 or len(top10) < 10:
                 print(f"Warning: Only received {len(top10) if top10 else 0} items, expected 10")
@@ -262,32 +268,42 @@ def making_video(title, genre=""):
             print("Top 10 items:")
             for i, item in enumerate(top10, 1):
                 print(f"{i}. {item}")
-            print("--------------------------")
+            print("✓ Top 10 list generated")
         except Exception as e:
             print(f"Error getting top 10 list: {e}")
             print("Using generic items...")
             top10 = [f"Item {i+1} for {title}" for i in range(10)]
+            print("✓ Created fallback top 10 list")
         
         # Generate intro
         try:
+            print("\n----- Creating intro -----")
             intro(title)
-            print("--------------------------")
+            print("✓ Intro created successfully")
         except Exception as e:
             print(f"Failed to create intro: {e}")
+            print("Continuing without intro...")
         
         # Generate content for each item
+        print("\n----- Generating content for each item -----")
         successful_items = top10s(top10, genre, title)
         if successful_items < 5:  # If less than half the items were successful
             print("Warning: Less than 5 items were successfully processed.")
+        else:
+            print(f"✓ Successfully processed {successful_items} items")
         
         # Generate outro
         try:
+            print("\n----- Creating outro -----")
             outro()
+            print("✓ Outro created successfully")
         except Exception as e:
             print(f"Failed to create outro: {e}")
+            print("Continuing without outro...")
         
         # Download background music
         try:
+            print("\n----- Downloading background music -----")
             music_file = os.path.join(temp_dir, "song.mp3")
             download_file(read_random_line("download_list/background_music.txt"), music_file)
             
@@ -296,27 +312,36 @@ def making_video(title, genre=""):
                 # Create empty file as fallback
                 with open(music_file, "wb") as f:
                     f.write(b"") 
+            else:
+                print("✓ Background music downloaded")
                     
         except Exception as e:
             print(f"Error downloading background music: {e}")
             # Create empty file as fallback
             with open(os.path.join(temp_dir, "song.mp3"), "wb") as f:
                 f.write(b"")
+            print("Created empty music file as fallback")
         
         # Generate final video
         try:
-            print("Creating final video...")
-            mergevideo(title, os.path.join(temp_dir, "song.mp3"), top10, title)
-            print(f"Video saved as: {output_file}")
+            print("\n----- Creating final video -----")
+            success = mergevideo(title, os.path.join(temp_dir, "song.mp3"), top10, title)
+            if success:
+                print(f"✓ Video successfully saved as: {output_file}")
+                return True
+            else:
+                print("× Failed to create final video file")
+                return False
         except Exception as e:
             print(f"Error creating final video: {e}")
             print("See error details above.")
-            raise
+            return False
         
     except Exception as e:
         print(f"Error in video creation process: {e}")
         traceback.print_exc()
         print("\nUnQTube video creation failed.")
+        return False
     finally:
         cleanup()
 
@@ -358,3 +383,234 @@ def make_intro(title):
     
     # If withvideo is False or any errors occur, return None
     return None
+
+def making_video_optimized(title, genre=""):
+    """Optimized function to create a top 10 video using a single Gemini API call"""
+    output_file = "UnQTube_" + title.replace(" ", "_") + ".mp4"
+    if os.path.exists('/content'):
+        output_file = os.path.join('/content', output_file)
+        
+    temp_dir = get_temp_dir()
+    
+    # Save cleanup function for finally block
+    def cleanup():
+        try:
+            print("\n----- Running cleanup -----")
+            if os.path.exists("temp.txt"):
+                os.remove("temp.txt")
+            delete_directories_and_file(0, 11)
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+    
+    try:
+        # Get the genre
+        try:
+            genre = read_config_file()["general_topic"]
+        except Exception as e:
+            print(f"Error reading genre from config: {e}")
+            if not genre:  # Only use default if no genre was provided as parameter
+                genre = "video"  # Default genre
+        
+        print("\n====== STARTING OPTIMIZED TOP 10 VIDEO CREATION ======")
+        print(f"Topic: {title}")
+        print(f"Genre: {genre}")
+        print(f"Output file will be: {output_file}")
+        print("==========================================")
+        
+        # Get all content in a single API call
+        try:
+            print("\n----- Generating all content with a single Gemini API call -----")
+            language = read_config_file().get("language", "english")
+            complete_content = generate_complete_top10_content(title, genre, language)
+            
+            if not complete_content:
+                raise ValueError("Failed to generate complete content")
+                
+            print("✓ Successfully generated all content in a single API call")
+            print(f"Top 10 items:")
+            for i, item in enumerate(complete_content["items"], 1):
+                print(f"{i}. {item}")
+                
+        except Exception as e:
+            print(f"Error generating complete content: {e}")
+            print("Falling back to non-optimized content generation...")
+            return making_video(title, genre)
+        
+        # Generate intro
+        try:
+            print("\n----- Creating intro -----")
+            intro_dir = os.path.join(temp_dir, "11")
+            os.makedirs(intro_dir, exist_ok=True)
+            
+            # Use intro text from the complete content
+            intro_text = complete_content["intro"]
+            print(intro_text)
+            
+            # Generate intro audio
+            audio_file = os.path.join(intro_dir, "11.mp3")
+            language_code = get_language_code(language)
+            generate_voice(intro_text, audio_file, language_code)
+            print("✓ Intro audio generated successfully")
+            
+            # Download images for intro
+            try:
+                getim(title, intro_dir)
+                delete_invalid_images(intro_dir)
+                sortimage(intro_dir)
+                delete_invalid_images(intro_dir)
+                shape_error(intro_dir)
+                sortimage(intro_dir)
+                print("✓ Intro images downloaded and processed")
+            except Exception as e:
+                print(f"Error processing intro images: {e}")
+                print("Continuing with available or placeholder images...")
+            
+        except Exception as e:
+            print(f"Failed to create intro: {e}")
+            print("Continuing without intro...")
+        
+        # Generate content for each item
+        print("\n----- Generating content for each item -----")
+        top10 = complete_content["items"]
+        successful_items = 0
+        
+        # Process each item
+        for i, (item, segment) in enumerate(zip(top10, complete_content["segments"]), 1):
+            try:
+                print(f"\nProcessing item {i}: {item}")
+                item_dir = os.path.join(temp_dir, str(i))
+                os.makedirs(item_dir, exist_ok=True)
+                
+                # Get search terms
+                search_terms = segment.get("search_terms", [])
+                if search_terms:
+                    search_term = search_terms[0]
+                    print(f"Using search term: '{search_term}'")
+                else:
+                    search_term = f"{item} {genre}"
+                    print(f"Using default search term: '{search_term}'")
+                
+                # Download images
+                try:
+                    getim(search_term, item_dir)
+                    delete_invalid_images(item_dir)
+                    sortimage(item_dir)
+                    delete_invalid_images(item_dir)
+                    shape_error(item_dir)
+                    sortimage(item_dir)
+                    print("✓ Images downloaded and processed")
+                except Exception as e:
+                    print(f"Error processing images: {e}")
+                    print("Continuing with available or placeholder images...")
+                
+                # Get script text
+                script_text = segment.get("script", f"Item {i}: {item} is an excellent example of {title}.")
+                
+                # Add the item number prefix
+                try:
+                    item_prefix = translateto(f"number {i} {item}", language_code)
+                    full_text = f"{item_prefix},,..,{script_text}"
+                except Exception as e:
+                    print(f"Error translating item prefix: {e}")
+                    full_text = f"Item {i}: {item}. {script_text}"
+                
+                print(full_text)
+                
+                # Generate audio
+                mp3file = os.path.join(item_dir, f"{i}.mp3")
+                generate_voice(full_text, mp3file, language_code)
+                print(f"✓ Item {i} processed successfully")
+                successful_items += 1
+                
+            except Exception as e:
+                print(f"Error processing item {i}: {e}")
+                print("Continuing with next item...")
+        
+        # Generate outro
+        try:
+            print("\n----- Creating outro -----")
+            outro_dir = os.path.join(temp_dir, "0")
+            os.makedirs(outro_dir, exist_ok=True)
+            
+            # Download outro image
+            try:
+                image_path = os.path.join(outro_dir, "1.jpg")
+                outro_image = read_random_line("download_list/outro_pic.txt")
+                download_file(outro_image, image_path)
+                if os.path.exists(image_path):
+                    print("✓ Outro image downloaded")
+                else:
+                    print("Warning: Outro image download failed")
+            except Exception as e:
+                print(f"Error downloading outro image: {e}")
+            
+            # Generate outro audio
+            try:
+                audio_path = os.path.join(outro_dir, "0.mp3")
+                outro_text = complete_content["outro"]
+                generate_voice(outro_text, audio_path, language_code)
+                
+                if os.path.exists(audio_path):
+                    print("✓ Outro audio generated")
+                else:
+                    print("Error: Failed to generate outro audio")
+                    # Create a blank file as placeholder
+                    with open(audio_path, "wb") as f:
+                        f.write(b"")
+            except Exception as e:
+                print(f"Error generating outro audio: {e}")
+                # Create a blank file as placeholder
+                with open(os.path.join(outro_dir, "0.mp3"), "wb") as f:
+                    f.write(b"")
+        
+        except Exception as e:
+            print(f"Failed to create outro: {e}")
+            print("Continuing without outro...")
+        
+        # Download background music
+        try:
+            print("\n----- Downloading background music -----")
+            music_file = os.path.join(temp_dir, "song.mp3")
+            download_file(read_random_line("download_list/background_music.txt"), music_file)
+            
+            if not os.path.exists(music_file):
+                print("Warning: Background music download failed. Creating empty file.")
+                # Create empty file as fallback
+                with open(music_file, "wb") as f:
+                    f.write(b"") 
+            else:
+                print("✓ Background music downloaded")
+                    
+        except Exception as e:
+            print(f"Error downloading background music: {e}")
+            # Create empty file as fallback
+            with open(os.path.join(temp_dir, "song.mp3"), "wb") as f:
+                f.write(b"")
+            print("Created empty music file as fallback")
+        
+        # Generate final video
+        try:
+            print("\n----- Creating final video -----")
+            success = mergevideo(title, os.path.join(temp_dir, "song.mp3"), top10, title)
+            if success:
+                print(f"✓ Video successfully saved as: {output_file}")
+                return True
+            else:
+                print("× Failed to create final video file")
+                return False
+        except Exception as e:
+            print(f"Error creating final video: {e}")
+            print("See error details above.")
+            return False
+        
+    except Exception as e:
+        print(f"Error in optimized video creation process: {e}")
+        traceback.print_exc()
+        print("\nFalling back to non-optimized video creation...")
+        return making_video(title, genre)
+    finally:
+        cleanup()
+
+# For backward compatibility, replace the original function with the optimized one
+making_video_original = making_video  # Keep the original function
+making_video = making_video_optimized  # Replace with optimized version

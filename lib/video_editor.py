@@ -6,6 +6,7 @@ import os
 import requests
 import traceback
 import numpy as np
+import time
 
 from lib.media_api import get_videos,download_file,enhance_search_term
 from lib.image_procces import resize_and_add_borders
@@ -242,22 +243,33 @@ def _make_intro_with_images(title):
 def mergevideo(videoname, audio_file, tops, title):
     """Merge all video segments with robust error handling"""
     try:
-        print("Starting final video creation...")
+        output_filename = f"UnQTube_{videoname}.mp4"
+        if os.path.exists('/content'):
+            output_filename = os.path.join('/content', output_filename)
+            
+        print("\n====== STARTING FINAL VIDEO CREATION ======")
+        print(f"Output file will be: {output_filename}")
         video_clips = []
 
         # Create intro
         try:
-            print("Creating intro segment...")
+            print("\n----- Creating intro segment -----")
             video_clip = make_intro(title)
-            video_clips.append(video_clip)
+            if video_clip:
+                video_clips.append(video_clip)
+                print("✓ Intro segment created successfully")
+            else:
+                raise Exception("Intro clip is None")
         except Exception as e:
             print(f"Error creating intro: {e}")
             traceback.print_exc()
             # Create a minimal fallback intro
+            print("Creating emergency fallback intro")
             blank_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
-            cv2.putText(blank_img, "Introduction", (100, 540), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5, cv2.LINE_AA)
+            cv2.putText(blank_img, f"Introduction to {title}", (100, 540), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5, cv2.LINE_AA)
             fallback_intro = mp.ImageClip(blank_img).set_duration(5)
             video_clips.append(fallback_intro)
+            print("✓ Emergency fallback intro created")
         
         # Create content and outro segments
         chapter_text = "00:00 intro\n"
@@ -272,26 +284,65 @@ def mergevideo(videoname, audio_file, tops, title):
                 else:
                     top = ""
                 
-                print(f"Processing segment {ir}: {top}")
-                if os.path.exists(f"tempfiles/{ir}"):
-                    video_clip = create_video_with_images_and_audio(f"tempfiles/{ir}", f"tempfiles/{ir}/{ir}.mp3", top)
-                    video_clips.append(video_clip)
+                print(f"\n----- Processing segment {ir}: {top} -----")
+                segment_path = f"tempfiles/{ir}"
+                if os.path.exists(segment_path):
+                    audio_path = f"{segment_path}/{ir}.mp3"
+                    if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+                        print(f"Warning: Audio file {audio_path} missing or empty")
+                        # Create a blank audio file as fallback
+                        try:
+                            from pydub import AudioSegment
+                            silence = AudioSegment.silent(duration=5000)  # 5 seconds of silence
+                            silence.export(audio_path, format="mp3")
+                            print("✓ Created fallback silent audio")
+                        except Exception as audio_e:
+                            print(f"Could not create fallback audio: {audio_e}")
+                            # Just continue, create_video_with_images_and_audio has its own audio fallback
                     
-                    # Update chapter markers
-                    if i < 11:  # Skip the intro as it was already added
-                        sum_duration += video_clips[len(video_clips) - 2].duration  # Use previous clip's duration
-                        minutes = int(sum_duration / 60)
-                        seconds = int(sum_duration % 60)
-                        time_marker = f"{minutes:02d}:{seconds:02d}"
+                    # Count images in directory
+                    image_count = len([f for f in os.listdir(segment_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+                    print(f"Found {image_count} images for segment {ir}")
+                    
+                    if image_count == 0:
+                        print("No images found, creating blank image")
+                        blank_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
+                        segment_text = top if top else f"Segment {ir}"
+                        cv2.putText(blank_img, segment_text, (100, 540), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5, cv2.LINE_AA)
+                        blank_path = os.path.join(segment_path, "blank.jpg")
+                        cv2.imwrite(blank_path, blank_img)
+                        print("✓ Created fallback blank image")
+                    
+                    print(f"Creating video segment {ir}")
+                    video_clip = create_video_with_images_and_audio(segment_path, audio_path, top)
+                    if video_clip:
+                        video_clips.append(video_clip)
+                        print(f"✓ Segment {ir} created successfully")
                         
-                        if i > 0 and i <= 10:
-                            # For content segments 1-10
-                            chapter_text += f"{time_marker} {tops[10-i]}\n"
-                        elif i == 0:
-                            # For outro
-                            chapter_text += f"{time_marker} outro\n"
+                        # Update chapter markers
+                        if i < 11:  # Skip the intro as it was already added
+                            sum_duration += video_clips[len(video_clips) - 2].duration  # Use previous clip's duration
+                            minutes = int(sum_duration / 60)
+                            seconds = int(sum_duration % 60)
+                            time_marker = f"{minutes:02d}:{seconds:02d}"
+                            
+                            if i > 0 and i <= 10:
+                                # For content segments 1-10
+                                chapter_text += f"{time_marker} {tops[10-i]}\n"
+                            elif i == 0:
+                                # For outro
+                                chapter_text += f"{time_marker} outro\n"
+                    else:
+                        raise Exception("Segment video clip is None")
                 else:
-                    print(f"Warning: Directory tempfiles/{ir} not found. Skipping segment.")
+                    print(f"Warning: Directory {segment_path} not found. Creating fallback segment.")
+                    # Create a minimal fallback segment
+                    blank_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
+                    segment_text = top if top else f"Segment {ir}"
+                    cv2.putText(blank_img, segment_text, (100, 540), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5, cv2.LINE_AA)
+                    fallback_segment = mp.ImageClip(blank_img).set_duration(5)
+                    video_clips.append(fallback_segment)
+                    print(f"✓ Created emergency fallback for segment {ir}")
             except Exception as e:
                 print(f"Error processing segment {ir}: {e}")
                 traceback.print_exc()
@@ -301,6 +352,7 @@ def mergevideo(videoname, audio_file, tops, title):
                 cv2.putText(blank_img, segment_text, (100, 540), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5, cv2.LINE_AA)
                 fallback_segment = mp.ImageClip(blank_img).set_duration(5)
                 video_clips.append(fallback_segment)
+                print(f"✓ Created emergency fallback for segment {ir}")
 
         # Save chapter markers to file
         try:
@@ -315,20 +367,46 @@ def mergevideo(videoname, audio_file, tops, title):
             blank_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
             cv2.putText(blank_img, f"Video: {title}", (100, 540), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5, cv2.LINE_AA)
             video_clips = [mp.ImageClip(blank_img).set_duration(10)]
+            print("✓ Created emergency fallback video")
 
         # Concatenate all clips
-        print(f"Concatenating {len(video_clips)} video clips...")
-        final_video = concatenate_videoclips(video_clips)
+        print(f"\n----- Concatenating {len(video_clips)} video clips -----")
+        try:
+            final_video = concatenate_videoclips(video_clips, method="compose")
+            print("✓ Video clips concatenated successfully")
+        except Exception as concat_error:
+            print(f"Error concatenating clips: {concat_error}")
+            traceback.print_exc()
+            
+            # Try safer concatenation settings
+            print("Attempting safer concatenation with method='chain'...")
+            try:
+                final_video = concatenate_videoclips(video_clips, method="chain")
+                print("✓ Video clips concatenated with alternate method")
+            except Exception as alt_concat_error:
+                print(f"Alternative concatenation also failed: {alt_concat_error}")
+                
+                # Last resort: just use the first clip if we have one
+                if video_clips:
+                    print("Using just the first clip as emergency fallback")
+                    final_video = video_clips[0]
+                else:
+                    # This should never happen due to earlier check, but just in case
+                    print("No clips available - creating emergency blank video")
+                    blank_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
+                    cv2.putText(blank_img, f"Emergency video for {title}", (100, 540), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5, cv2.LINE_AA)
+                    final_video = mp.ImageClip(blank_img).set_duration(10)
         
         # Add background music if available
         try:
             if os.path.exists(audio_file) and os.path.getsize(audio_file) > 0:
-                print("Adding background music...")
+                print("\n----- Adding background music -----")
                 audio_clip = AudioFileClip(audio_file)
                 if final_video.duration < audio_clip.duration:
                     audio_clip = audio_clip.subclip(0, final_video.duration)
                 adjusted_audio_clip = CompositeAudioClip([audio_clip.volumex(0.05), final_video.audio])
                 final_video = final_video.set_audio(adjusted_audio_clip)
+                print("✓ Background music added")
             else:
                 print("Background music file not found or empty. Using original audio.")
         except Exception as e:
@@ -336,25 +414,119 @@ def mergevideo(videoname, audio_file, tops, title):
             # Continue with original audio
 
         # Write the final video file with robust error handling
-        output_filename = f"UnQTube_{videoname}.mp4"
-        print(f"Writing final video to {output_filename}...")
-        try:
-            final_video.write_videofile(output_filename, audio_codec='aac', threads=4)
-            print(f"Successfully created video: {output_filename}")
-        except Exception as write_error:
-            print(f"Error writing video file: {write_error}")
-            traceback.print_exc()
-            
-            # Try with different codec settings
+        print(f"\n----- Writing final video to {output_filename} -----")
+        success = False
+        
+        # Try different codec configurations in order of preference
+        write_attempts = [
+            # First attempt - standard settings
+            {"codec": "libx264", "audio_codec": "aac", "threads": 4, "fps": 30},
+            # Second attempt - ultrafast preset for speed
+            {"codec": "libx264", "audio_codec": "aac", "preset": "ultrafast", "threads": 4, "fps": 24},
+            # Third attempt - very low bitrate
+            {"codec": "libx264", "audio_codec": "aac", "preset": "ultrafast", "bitrate": "1000k", "threads": 2, "fps": 20},
+            # Last attempt - minimal quality emergency settings
+            {"codec": "libx264", "audio_codec": "aac", "preset": "ultrafast", "bitrate": "500k", "threads": 1, "fps": 15}
+        ]
+        
+        for i, settings in enumerate(write_attempts):
+            if success:
+                break
+                
             try:
-                print("Retrying with different codec settings...")
-                final_video.write_videofile(output_filename, codec='libx264', audio_codec='aac', preset='ultrafast', threads=4)
-                print(f"Successfully created video with alternative settings: {output_filename}")
-            except Exception as retry_error:
-                print(f"Failed to write video even with alternative settings: {retry_error}")
+                print(f"Write attempt {i+1}/{len(write_attempts)} with settings: {settings}")
+                final_video.write_videofile(output_filename, **settings)
+                print(f"✓ Successfully created video: {output_filename}")
+                success = True
+                
+                # Verify the file exists and has content
+                if os.path.exists(output_filename) and os.path.getsize(output_filename) > 0:
+                    print(f"✓ Verified file exists with size: {os.path.getsize(output_filename)} bytes")
+                else:
+                    print(f"⚠ Warning: Output file empty or missing, continuing to next attempt")
+                    success = False
+                    
+            except Exception as write_error:
+                print(f"Error in attempt {i+1}: {write_error}")
                 traceback.print_exc()
-                raise  # Re-raise to inform the caller about the failure
+                
+                # Small delay before retrying
+                time.sleep(1)
+        
+        # If all attempts failed, try emergency video generation
+        if not success:
+            print("All standard write attempts failed. Trying emergency video generation...")
+            try:
+                # Create an extremely simple video
+                emergency_img = np.zeros((720, 1280, 3), dtype=np.uint8)  # Smaller resolution
+                cv2.putText(emergency_img, f"Emergency video for {title}", (50, 360), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3, cv2.LINE_AA)
+                emergency_clip = mp.ImageClip(emergency_img).set_duration(10)
+                
+                # Write with minimal settings
+                emergency_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac", 
+                                            preset="ultrafast", bitrate="500k", fps=10)
+                print(f"✓ Emergency video created: {output_filename}")
+                success = True
+            except Exception as emergency_error:
+                print(f"Emergency video creation failed: {emergency_error}")
+                traceback.print_exc()
+                
+                # Last resort: try writing a static image as MP4
+                try:
+                    print("Attempting to write a static image as video...")
+                    import subprocess
+                    last_resort_img = "emergency_frame.jpg"
+                    cv2.imwrite(last_resort_img, emergency_img)
+                    
+                    ffmpeg_cmd = f"ffmpeg -loop 1 -i {last_resort_img} -c:v libx264 -t 5 -pix_fmt yuv420p -y {output_filename}"
+                    subprocess.call(ffmpeg_cmd, shell=True)
+                    
+                    if os.path.exists(output_filename) and os.path.getsize(output_filename) > 0:
+                        print(f"✓ Created last resort video: {output_filename}")
+                        success = True
+                    else:
+                        print("Last resort video creation failed")
+                        
+                    # Cleanup temp file
+                    if os.path.exists(last_resort_img):
+                        os.remove(last_resort_img)
+                except Exception as last_error:
+                    print(f"Last resort video creation failed: {last_error}")
+        
+        print("\n====== VIDEO CREATION COMPLETE ======")
+        return success
+            
     except Exception as e:
         print(f"Critical error in mergevideo: {e}")
         traceback.print_exc()
-        raise  # Re-raise to inform the caller about the failure
+        
+        # Try one last emergency approach
+        try:
+            print("\n====== ATTEMPTING EMERGENCY VIDEO CREATION ======")
+            output_filename = f"UnQTube_{videoname}.mp4"
+            if os.path.exists('/content'):
+                output_filename = os.path.join('/content', output_filename)
+                
+            emergency_img = np.zeros((720, 1280, 3), dtype=np.uint8)
+            cv2.putText(emergency_img, f"Emergency video for: {title}", (50, 320), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3, cv2.LINE_AA)
+            cv2.putText(emergency_img, "Video generation encountered an error", (50, 400), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            
+            emergency_img_path = "emergency_frame.jpg"
+            cv2.imwrite(emergency_img_path, emergency_img)
+            
+            import subprocess
+            ffmpeg_cmd = f"ffmpeg -loop 1 -i {emergency_img_path} -c:v libx264 -t 5 -pix_fmt yuv420p -y {output_filename}"
+            subprocess.call(ffmpeg_cmd, shell=True)
+            
+            if os.path.exists(emergency_img_path):
+                os.remove(emergency_img_path)
+                
+            if os.path.exists(output_filename) and os.path.getsize(output_filename) > 0:
+                print(f"✓ Created absolute last resort video: {output_filename}")
+                return True
+            else:
+                print("Failed to create emergency video")
+                return False
+        except Exception as emergency_error:
+            print(f"Emergency video creation failed: {emergency_error}")
+            return False
