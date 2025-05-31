@@ -119,23 +119,5 @@ for use your custom background music and outro pic in video put this download li
 # Required APIs
 
 - **Openai**: There is no need now
+
 - **pexels API**: get from [pexels.com](pexels.com) for free
-- **Gemini API (Optional)**: For enhanced script generation and media search, get API key from [Google AI Studio](https://aistudio.google.com/)
-
-# 🤖 Gemini Integration
-
-UnQTube now supports Google's Gemini AI for enhanced script generation and media search:
-
-1. Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/)
-2. Add your API key to config.txt:
-   ```
-   gemini_api = YOUR_GEMINI_API_KEY
-   use_gemini = yes
-   ```
-
-Benefits of using Gemini:
-- Better script generation for more engaging content
-- Enhanced search terms for finding more relevant images and videos
-- Higher quality visuals that match your script content
-
-To disable Gemini and use the original ChatGPT integration, set `use_gemini = no` in config.txt.

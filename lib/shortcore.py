@@ -6,17 +6,28 @@ import requests
 from moviepy.editor import VideoFileClip, concatenate_videoclips, AudioFileClip, CompositeAudioClip
 
 from lib.video_texts import getyamll,read_config_file,read_random_line
-from lib.APIss import download_file,chatgpt,translateto
+from lib.APIss import download_file,chatgpt,translateto,enhance_search_term
 from lib.voices import generate_voice
 from lib.language import get_language_code
 
 def get_video(prompt,videoname):
+    # Check if we should use Gemini to enhance the video search
+    use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
+    
+    if use_gemini:
+        # Enhance the search prompt using Gemini
+        enhanced_prompt = enhance_search_term(prompt)
+        print(f"Using Gemini-enhanced video search: '{enhanced_prompt}'")
+        search_prompt = enhanced_prompt
+    else:
+        search_prompt = prompt
+    
     url = "https://api.pexels.com/videos/search"
     headers = {
         "Authorization": read_config_file()["pexels_api"]
     }
     params = {
-        "query": prompt,
+        "query": search_prompt,
         "per_page": 1
     }
 

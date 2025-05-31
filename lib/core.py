@@ -4,7 +4,7 @@ import sys
 
 from lib.video_texts import get_names,process_text,getyamll,read_config_file,read_random_line
 from lib.image_procces import getim,delete_invalid_images,sortimage,shape_error
-from lib.APIss import download_file,chatgpt,translateto
+from lib.APIss import download_file,chatgpt,translateto,enhance_search_term
 from lib.video_editor import mergevideo
 from lib.voices import generate_voice
 from lib.language import get_language_code
@@ -100,3 +100,20 @@ def making_video(title,genre=""):
   if os.path.exists("temp.txt"):
     os.remove("temp.txt")
   sys.exit()
+
+def make_intro(title):
+  withvideo= read_config_file()["intro_video"]
+  if(withvideo == "yes" or withvideo == "Yes" or withvideo == "YES"):
+    
+    # Check if we should use Gemini to enhance the video search
+    use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
+    
+    if use_gemini:
+        # Enhance the search title using Gemini
+        enhanced_title = enhance_search_term(title)
+        print(f"Using Gemini-enhanced intro video search: '{enhanced_title}'")
+        search_title = enhanced_title
+    else:
+        search_title = title
+    
+    links = get_videos(search_title)

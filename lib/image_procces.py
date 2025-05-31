@@ -5,11 +5,22 @@ import requests
 import json
 import hashlib
 
-from lib.APIss import getBingImages
+from lib.APIss import getBingImages, enhance_search_term
+from lib.video_texts import read_config_file
 
 
 def getim(top, paths):
-    links = getBingImages(top)
+    # Check if we should use Gemini to enhance the search terms
+    use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
+    
+    if use_gemini:
+        # Enhance the search term using Gemini
+        enhanced_top = enhance_search_term(top)
+        print(f"Using Gemini-enhanced search term: '{enhanced_top}'")
+        links = getBingImages(enhanced_top)
+    else:
+        links = getBingImages(top)
+        
     result = []
     for link in links:
         width = link["width"]

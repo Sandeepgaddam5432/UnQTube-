@@ -4,3 +4,5 @@ intro_video = no
 pexels_api = pexels_api
 language = english
 multi_speaker = no
+use_gemini = no
+gemini_api = YOUR_GEMINI_API_KEY

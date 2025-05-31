@@ -6,13 +6,21 @@ import edge_tts
 from edge_tts import VoicesManager
 from lib.video_texts import read_config_file
 
-def generate_voice(text, outputfile,lang):
+def generate_voice(text, outputfile, lang):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        with ThreadPoolExecutor() as executor:
-            loop.run_in_executor(executor, run_async_func, loop, async_generate_voice, text, outputfile,lang)
+        # Run the async function directly in this thread
+        result = loop.run_until_complete(async_generate_voice(text, outputfile, lang))
+        
+        # Ensure all pending tasks are completed
+        pending = asyncio.all_tasks(loop)
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            
     finally:
+        # Close the loop properly
+        loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
 
     if not os.path.exists(outputfile):
@@ -20,7 +28,8 @@ def generate_voice(text, outputfile,lang):
         raise Exception("An error happened during edge_tts audio generation, no output audio generated")
 
     return outputfile
-async def async_generate_voice(text, outputfile,lang):
+
+async def async_generate_voice(text, outputfile, lang):
     try:
         voices = await VoicesManager.create()
         if (lang == "en"):
@@ -45,13 +54,11 @@ async def async_generate_voice(text, outputfile,lang):
                 if chunk["type"] == "audio":
                     file.write(chunk["data"])
                 elif chunk["type"] == "WordBoundary":
-                    submaker.create_sub((chunk["offset"], chunk["duration"]), chunk["text"])
+                    submaker.add(chunk["offset"], chunk["duration"], chunk["text"])
 
     except Exception as e:
         print("Error generating audio using edge_tts", e)
         raise Exception("An error happened during edge_tts audio generation, no output audio generated", e)
 
     return outputfile
-def run_async_func(loop, func, *args):
-    return loop.run_until_complete(func(*args))
 

@@ -2,6 +2,7 @@ import re
 import requests
 import urllib.parse
 from deep_translator import GoogleTranslator
+import os
 
 def read_config_file(file_path="config.txt"):
     config = {}
@@ -67,6 +68,17 @@ def get_videos(title):
 
 #ai API (chatgpt)
 def chatgpt(prompt):
+    # Check if we should use Gemini instead of ChatGPT
+    try:
+        use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
+        if use_gemini:
+            # Import here to avoid circular imports
+            from lib.gemini_api import generate_script_with_gemini
+            return generate_script_with_gemini(prompt)
+    except (ImportError, Exception) as e:
+        print(f"Error using Gemini, falling back to ChatGPT: {e}")
+        
+    # Default to original ChatGPT endpoint
     api_url = f"https://llm.sswsuport.workers.dev/?query={prompt}"
     response = requests.get(api_url)
     return response.text
@@ -86,3 +98,34 @@ def download_file(url, save_path):
 def translateto(text,language):
     translator = GoogleTranslator(target=language)
     return translator.translate(text)
+
+# Enhanced media search using Gemini
+def enhance_search_term(term, api_key=None):
+    """Use Gemini to enhance a search term for better media results"""
+    try:
+        use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
+        if use_gemini:
+            from lib.gemini_api import generate_script_with_gemini
+            
+            prompt = f"""
+            Enhance this search term to make it more specific and better for finding high-quality stock 
+            footage or images: "{term}"
+            
+            Return ONLY the enhanced search term as a single line of text, with no explanation or additional text.
+            Focus on adding visual details, camera angles, or composition details.
+            """
+            
+            response = generate_script_with_gemini(prompt, api_key)
+            
+            # Clean up response - extract just the first line without any quotes or formatting
+            enhanced_term = response.strip().split('\n')[0]
+            for char in ['"', "'", '`', '*', '#']:
+                enhanced_term = enhanced_term.replace(char, '')
+                
+            print(f"Enhanced search term: '{term}' → '{enhanced_term}'")
+            return enhanced_term
+    except Exception as e:
+        print(f"Error enhancing search term with Gemini: {e}")
+    
+    # Return original term if enhancement fails
+    return term

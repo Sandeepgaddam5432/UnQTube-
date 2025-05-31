@@ -5,7 +5,7 @@ import cv2
 import os
 import requests
 
-from lib.APIss import get_videos,download_file
+from lib.APIss import get_videos,download_file,enhance_search_term
 from lib.image_procces import resize_and_add_borders
 from lib.video_texts import read_config_file
 from lib.image_procces import getim,delete_invalid_images,sortimage,shape_error
@@ -50,7 +50,18 @@ def make_intro(title):
   withvideo= read_config_file()["intro_video"]
   if(withvideo == "yes" or withvideo == "Yes" or withvideo == "YES"):
     
-    links = get_videos(title)
+    # Check if we should use Gemini to enhance the video search
+    use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
+    
+    if use_gemini:
+        # Enhance the search title using Gemini
+        enhanced_title = enhance_search_term(title)
+        print(f"Using Gemini-enhanced intro video search: '{enhanced_title}'")
+        search_title = enhanced_title
+    else:
+        search_title = title
+    
+    links = get_videos(search_title)
 
     videos_count = 0
     video_times = 0
