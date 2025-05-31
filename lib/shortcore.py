@@ -9,6 +9,7 @@ from lib.video_texts import getyamll,read_config_file,read_random_line
 from lib.APIss import download_file,chatgpt,translateto,enhance_search_term
 from lib.voices import generate_voice
 from lib.language import get_language_code
+from lib.core import get_temp_dir
 
 def get_video(prompt,videoname):
     # Check if we should use Gemini to enhance the video search
@@ -76,8 +77,8 @@ def resize_and_text(videopath,targetwidth=1080,targetheight=1920):
 
 
 def final_video(title,time,language,multi_speaker):
-    if not os.path.exists("temp"):
-        os.mkdir("temp")
+    temp_dir = get_temp_dir()
+    os.makedirs(temp_dir, exist_ok=True)
     
     print("--------------------------------")
     print(title + " in " + time + " second"+", "+language+", multi speaker : "+multi_speaker)
@@ -85,7 +86,11 @@ def final_video(title,time,language,multi_speaker):
     original_text = chatgpt(getyamll("short_prompt")).format(title=title,time=time)
     print(original_text)
     print("--------------------------------")
-    download_file(read_random_line("download_list/background_music.txt"), "temp/song.mp3")
+    
+    # Use absolute paths for temp directory
+    song_file = os.path.join(temp_dir, "song.mp3")
+    download_file(read_random_line("download_list/background_music.txt"), song_file)
+    
     videoprompts = re.findall(r'\[([^\]]+)\]', original_text)
     if "Text" in original_text:
         texts = re.findall(r'Text:\s+"([^"]+)"', original_text)
@@ -94,32 +99,48 @@ def final_video(title,time,language,multi_speaker):
     print(videoprompts)
     print(texts)
     print("--------------------------------")
+    
     videos = []
     i = 0
-    if not os.path.exists("temp"):
-        os.mkdir("temp")
+    
     for text,prompt in zip(texts,videoprompts):
-        get_video(prompt,"temp/"+str(i)+".mp4")
+        video_file = os.path.join(temp_dir, f"{i}.mp4")
+        audio_file = os.path.join(temp_dir, f"{i}.mp3")
+        
+        get_video(prompt, video_file)
         print("video download")
-        generate_voice(translateto(text,get_language_code(language)),"temp/"+str(i)+".mp3",get_language_code(language))
+        
+        generate_voice(translateto(text,get_language_code(language)), audio_file, get_language_code(language))
         print("speech make")
-        videos.append(resize_and_text("temp/"+str(i)))
+        
+        # Pass just the base path without extension to resize_and_text
+        video_base_path = os.path.join(temp_dir, str(i))
+        videos.append(resize_and_text(video_base_path))
         i+=1
 
     final_video = concatenate_videoclips(videos)
-    audio_clip = AudioFileClip("temp/song.mp3")
+    audio_clip = AudioFileClip(song_file)
     if final_video.duration < audio_clip.duration:
         audio_clip = audio_clip.subclip(0, final_video.duration)
 
     adjusted_audio_clip = CompositeAudioClip([audio_clip.volumex(0.12),final_video.audio])
     final_video = final_video.set_audio(adjusted_audio_clip)
-    final_video.write_videofile("UnQTube_short.mp4", audio_codec='aac')
+    
+    # Save to a consistent location whether in Colab or local
+    output_file = "UnQTube_short.mp4"
+    if os.path.exists('/content'):
+        output_file = os.path.join('/content', output_file)
+    
+    final_video.write_videofile(output_file, audio_codec='aac')
 
+    # Clean up
     if os.path.exists("temp.txt"):
         os.remove("temp.txt")
-    if os.path.exists("temp") and os.path.isdir("temp"):
-        shutil.rmtree("temp")
-        print(f"Directory temp deleted successfully.")
-    else:
-        print(f"Directory temp not found.")
+    
+    try:
+        shutil.rmtree(temp_dir)
+        print(f"Directory {temp_dir} deleted successfully.")
+    except Exception as e:
+        print(f"Error deleting directory {temp_dir}: {e}")
+    
     sys.exit()

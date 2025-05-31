@@ -9,24 +9,48 @@ from lib.video_editor import mergevideo
 from lib.voices import generate_voice
 from lib.language import get_language_code
 
+def get_temp_dir():
+    """Get the appropriate tempfiles directory path based on environment"""
+    # Check if we're running in Colab
+    if os.path.exists('/content'):
+        base_dir = '/content/UnQTube-'
+        if os.path.exists(base_dir):
+            temp_dir = os.path.join(base_dir, 'tempfiles')
+            os.makedirs(temp_dir, exist_ok=True)
+            return temp_dir
+    
+    # Default for local execution
+    temp_dir = 'tempfiles'
+    os.makedirs(temp_dir, exist_ok=True)
+    return temp_dir
+
 def intro(title):
   introtext = chatgpt(getyamll("intro_prompt").format(title=title,language=read_config_file()["language"]))
   introtext = process_text(introtext, ":")
   print(introtext)
+  
+  temp_dir = get_temp_dir()
+  intro_dir = os.path.join(temp_dir, "11")
+  
   try:
-      os.makedirs("tempfiles/11")
-  except FileExistsError:
-      pass  
+      os.makedirs(intro_dir, exist_ok=True)
   except Exception as e:
-      print(f"Error: {e}")
-  generate_voice(introtext, "tempfiles/11/11.mp3",get_language_code(read_config_file()["language"]))
+      print(f"Error creating directory {intro_dir}: {e}")
+  
+  audio_file = os.path.join(intro_dir, "11.mp3")
+  generate_voice(introtext, audio_file, get_language_code(read_config_file()["language"]))
 
 def top10s(top10,genre,title):
   num = 1
+  temp_dir = get_temp_dir()
+  
   for top in top10:
     imagepath=str(num)
-    npath = "tempfiles/" + imagepath
-    mp3file = npath + "/" + imagepath + ".mp3"
+    npath = os.path.join(temp_dir, imagepath)
+    mp3file = os.path.join(npath, f"{imagepath}.mp3")
+    
+    # Ensure directory exists
+    os.makedirs(npath, exist_ok=True)
 
     getim(top+" "+genre,npath)
     delete_invalid_images(npath)
@@ -54,13 +78,21 @@ def top10s(top10,genre,title):
     num = num + 1
 
 def outro():
-  if not os.path.exists("tempfiles/0"):
-      os.mkdir("tempfiles/0")
-  download_file(read_random_line("download_list/outro_pic.txt"), "tempfiles/0/1.jpg")
-  generate_voice(translateto(getyamll("outro_text"),get_language_code(read_config_file()["language"])), "tempfiles/0/0.mp3",get_language_code(read_config_file()["language"]))
+  temp_dir = get_temp_dir()
+  outro_dir = os.path.join(temp_dir, "0")
+  
+  os.makedirs(outro_dir, exist_ok=True)
+  
+  download_file(read_random_line("download_list/outro_pic.txt"), os.path.join(outro_dir, "1.jpg"))
+  generate_voice(translateto(getyamll("outro_text"),get_language_code(read_config_file()["language"])), 
+                 os.path.join(outro_dir, "0.mp3"),
+                 get_language_code(read_config_file()["language"]))
 
 
-def delete_directories_and_file(start, end, base_directory="tempfiles/"):
+def delete_directories_and_file(start, end, base_directory=None):
+    if base_directory is None:
+        base_directory = get_temp_dir()
+        
     try:
         for i in range(start, end + 1):
             directory_path = os.path.join(base_directory, str(i))
@@ -94,8 +126,9 @@ def making_video(title,genre=""):
   top10s(top10,genre,title)
   outro()
 
-  download_file(read_random_line("download_list/background_music.txt"), "tempfiles/song.mp3")
-  mergevideo(title,"tempfiles/song.mp3",top10,title)
+  temp_dir = get_temp_dir()
+  download_file(read_random_line("download_list/background_music.txt"), os.path.join(temp_dir, "song.mp3"))
+  mergevideo(title, os.path.join(temp_dir, "song.mp3"), top10, title)
   delete_directories_and_file(0, 11)
   if os.path.exists("temp.txt"):
     os.remove("temp.txt")
