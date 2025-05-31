@@ -17,6 +17,15 @@ def get_gemini_key():
             
     return api_key
 
+def get_gemini_model():
+    """Get the selected Gemini model from config file or use default"""
+    try:
+        model = read_config_file().get('gemini_model', 'gemini-1.5-flash-latest')
+        return model
+    except:
+        # Default to a stable model if not specified
+        return 'gemini-1.5-flash-latest'
+
 def generate_script_with_gemini(prompt, api_key=None):
     """Generate script using Gemini API
     
@@ -33,7 +42,11 @@ def generate_script_with_gemini(prompt, api_key=None):
     if not api_key:
         raise ValueError("Gemini API key not found. Please set GEMINI_API_KEY environment variable or add 'gemini_api = YOUR_API_KEY' to config.txt")
     
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+    # Get model from config or use default
+    model_name = get_gemini_model()
+    
+    # Use stable v1 API instead of v1beta
+    url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent"
     
     headers = {
         "Content-Type": "application/json",

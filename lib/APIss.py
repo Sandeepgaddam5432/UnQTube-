@@ -3,6 +3,7 @@ import requests
 import urllib.parse
 from deep_translator import GoogleTranslator
 import os
+from lib.video_texts import read_config_file
 
 def read_config_file(file_path="config.txt"):
     config = {}
@@ -42,9 +43,6 @@ def getBingImages(texts, retries=5):
     raise Exception("Error While making bing image searches")
 
 #video API (Pexels)
-#def get_api():
-
-
 def get_videos(title):
   url = "https://api.pexels.com/videos/search"
   headers = {
@@ -66,22 +64,19 @@ def get_videos(title):
 
   return links
 
-#ai API (chatgpt)
+# AI API using Gemini
 def chatgpt(prompt):
-    # Check if we should use Gemini instead of ChatGPT
+    """
+    Generate AI text using Gemini (not ChatGPT)
+    This function was renamed for backward compatibility but now exclusively uses Gemini
+    """
+    # Import here to avoid circular imports
+    from lib.gemini_api import generate_script_with_gemini
+    
     try:
-        use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
-        if use_gemini:
-            # Import here to avoid circular imports
-            from lib.gemini_api import generate_script_with_gemini
-            return generate_script_with_gemini(prompt)
-    except (ImportError, Exception) as e:
-        print(f"Error using Gemini, falling back to ChatGPT: {e}")
-        
-    # Default to original ChatGPT endpoint
-    api_url = f"https://llm.sswsuport.workers.dev/?query={prompt}"
-    response = requests.get(api_url)
-    return response.text
+        return generate_script_with_gemini(prompt)
+    except Exception as e:
+        raise Exception(f"Error generating AI text with Gemini: {e}")
         
 #downlaod any file
 def download_file(url, save_path):
@@ -103,27 +98,25 @@ def translateto(text,language):
 def enhance_search_term(term, api_key=None):
     """Use Gemini to enhance a search term for better media results"""
     try:
-        use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
-        if use_gemini:
-            from lib.gemini_api import generate_script_with_gemini
+        from lib.gemini_api import generate_script_with_gemini
+        
+        prompt = f"""
+        Enhance this search term to make it more specific and better for finding high-quality stock 
+        footage or images: "{term}"
+        
+        Return ONLY the enhanced search term as a single line of text, with no explanation or additional text.
+        Focus on adding visual details, camera angles, or composition details.
+        """
+        
+        response = generate_script_with_gemini(prompt, api_key)
+        
+        # Clean up response - extract just the first line without any quotes or formatting
+        enhanced_term = response.strip().split('\n')[0]
+        for char in ['"', "'", '`', '*', '#']:
+            enhanced_term = enhanced_term.replace(char, '')
             
-            prompt = f"""
-            Enhance this search term to make it more specific and better for finding high-quality stock 
-            footage or images: "{term}"
-            
-            Return ONLY the enhanced search term as a single line of text, with no explanation or additional text.
-            Focus on adding visual details, camera angles, or composition details.
-            """
-            
-            response = generate_script_with_gemini(prompt, api_key)
-            
-            # Clean up response - extract just the first line without any quotes or formatting
-            enhanced_term = response.strip().split('\n')[0]
-            for char in ['"', "'", '`', '*', '#']:
-                enhanced_term = enhanced_term.replace(char, '')
-                
-            print(f"Enhanced search term: '{term}' → '{enhanced_term}'")
-            return enhanced_term
+        print(f"Enhanced search term: '{term}' → '{enhanced_term}'")
+        return enhanced_term
     except Exception as e:
         print(f"Error enhancing search term with Gemini: {e}")
     

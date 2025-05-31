@@ -69,14 +69,41 @@ async def async_generate_voice(text, outputfile, lang):
         # Generate audio file
         await communicate.save(outputfile)
         
-        # Generate subtitle file (optional - for future use)
+        # Generate subtitle file
+        # In edge-tts 7.0.2, we need to use the stream() method to generate subtitles
+        # because save_subtitles() doesn't exist
         subtitle_file = os.path.splitext(outputfile)[0] + ".vtt"
-        await communicate.save_subtitles(subtitle_file)
+        
+        try:
+            # Manually create subtitle file using the stream() output
+            with open(subtitle_file, 'w', encoding='utf-8') as f:
+                f.write("WEBVTT\n\n")
+                
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "WordBoundary":
+                        # Format: 00:00:00.000 --> 00:00:01.000
+                        start_time = format_timestamp(chunk["offset"] / 10000000)
+                        end_time = format_timestamp((chunk["offset"] + chunk["duration"]) / 10000000)
+                        
+                        f.write(f"{start_time} --> {end_time}\n")
+                        f.write(f"{chunk['text']}\n\n")
+                
+            print(f"Successfully generated subtitles: {subtitle_file}")
+        except Exception as subtitle_error:
+            print(f"Warning: Could not generate subtitles: {subtitle_error}")
+            # Continue execution even if subtitle generation fails
         
         print(f"Successfully generated audio: {outputfile}")
         return outputfile
         
     except Exception as e:
-        print(f"Error generating audio using edge_tts: {e}")
+        print(f"Error generating audio using edge-tts: {e}")
         raise Exception(f"An error happened during edge_tts audio generation: {e}")
+
+def format_timestamp(seconds):
+    """Format seconds into VTT timestamp format (HH:MM:SS.mmm)"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    seconds = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}"
 
