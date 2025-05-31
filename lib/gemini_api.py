@@ -20,13 +20,13 @@ def get_gemini_key():
     return api_key
 
 def list_available_gemini_models(api_key=None):
-    """List all available Gemini models for the given API key
+    """List all available Gemini models for the given API key that support text generation
     
     Args:
         api_key: Optional Gemini API key, if not provided will try to get from env/config
         
     Returns:
-        A list of available model names with the "models/" prefix
+        A list of available model names with the "models/" prefix that support text generation
     """
     if not api_key:
         api_key = get_gemini_key()
@@ -52,20 +52,42 @@ def list_available_gemini_models(api_key=None):
             
         result = response.json()
         
-        # Extract just the model names
-        models = []
+        # Extract just the model names that support text generation
+        text_generation_models = []
+        vision_models = []
+        other_models = []
+        
         for model in result.get("models", []):
             name = model.get("name", "")
-            # Keep the full name including "models/" prefix
-            if "gemini" in name.lower() and "generateContent" in model.get("supportedGenerationMethods", []):
-                models.append(name)
-                
-        if not models:
-            print("Warning: No Gemini models found for text generation")
+            supported_methods = model.get("supportedGenerationMethods", [])
+            
+            # Only include models that:
+            # 1. Have "gemini" in their name
+            # 2. Support the generateContent method
+            # 3. Don't have "-vision" in their name unless they also support text generation
+            if "gemini" in name.lower():
+                if "generateContent" in supported_methods:
+                    # Check if this is a vision-specific model
+                    if "vision" in name.lower() and not any(method != "generateContent" for method in supported_methods):
+                        vision_models.append(name)
+                    else:
+                        # This is a text-capable model or multi-modal model
+                        text_generation_models.append(name)
+                else:
+                    # Models that don't support generateContent at all
+                    other_models.append(name)
+        
+        # Log all models by category for debugging
+        print(f"Found {len(text_generation_models)} text generation models")
+        print(f"Found {len(vision_models)} vision-only models (excluded)")
+        print(f"Found {len(other_models)} other models that don't support text generation (excluded)")
+        
+        if not text_generation_models:
+            print("Warning: No Gemini models found that support text generation")
             # Return default models as fallback
             return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
             
-        return models
+        return text_generation_models
     except Exception as e:
         print(f"Error fetching available models: {e}")
         # Return default models as fallback
