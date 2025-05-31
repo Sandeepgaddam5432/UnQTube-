@@ -34,7 +34,7 @@ def list_available_gemini_models(api_key=None):
     if not api_key:
         print("Warning: No API key provided. Cannot list available models.")
         # Return some default models that are likely available
-        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.0-pro-vision"]
+        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
         
     url = f"https://generativelanguage.googleapis.com/v1/models"
     
@@ -48,7 +48,7 @@ def list_available_gemini_models(api_key=None):
         if response.status_code != 200:
             print(f"Error listing models: {response.status_code} - {response.text}")
             # Return some default models as fallback
-            return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.0-pro-vision"]
+            return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
             
         result = response.json()
         
@@ -63,13 +63,13 @@ def list_available_gemini_models(api_key=None):
         if not models:
             print("Warning: No Gemini models found for text generation")
             # Return default models as fallback
-            return ["models/gemini-pro", "models/gemini-1.0-pro"]
+            return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
             
         return models
     except Exception as e:
         print(f"Error fetching available models: {e}")
         # Return default models as fallback
-        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.0-pro-vision"]
+        return ["models/gemini-pro", "models/gemini-1.0-pro", "models/gemini-1.5-pro", "models/gemini-1.5-flash"]
 
 def get_gemini_model():
     """Get the selected Gemini model from config file or use default"""
@@ -104,12 +104,15 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
     # Get model from config or use default
     model_name = get_gemini_model()
     
-    # Ensure model has the required "models/" prefix
-    if not model_name.startswith("models/"):
-        model_name = f"models/{model_name}"
+    # Extract the model ID from the full model name
+    # The API expects just the model ID (e.g., "gemini-pro") as a parameter
+    if model_name.startswith("models/"):
+        model_id = model_name[7:]  # Remove "models/" prefix for the API request
+    else:
+        model_id = model_name
     
-    # Use stable v1 API 
-    url = f"https://generativelanguage.googleapis.com/v1/{model_name}:generateContent"
+    # Use the correct API endpoint format
+    url = "https://generativelanguage.googleapis.com/v1/models/" + model_id + ":generateContent"
     
     headers = {
         "Content-Type": "application/json",
@@ -153,9 +156,9 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
                     raise Exception(f"Unexpected Gemini API response format: {e}")
             elif response.status_code == 404:
                 # Model not found error - try with a different model
-                print(f"Model {model_name} not found. Attempting to use gemini-pro instead.")
-                model_name = "models/gemini-pro"
-                url = f"https://generativelanguage.googleapis.com/v1/{model_name}:generateContent"
+                print(f"Model {model_id} not found. Attempting to use gemini-pro instead.")
+                model_id = "gemini-pro"
+                url = "https://generativelanguage.googleapis.com/v1/models/" + model_id + ":generateContent"
             elif response.status_code == 429:
                 # Rate limit - wait and retry
                 wait_time = min(2 ** retries, 60)  # Exponential backoff up to 60 seconds
@@ -169,6 +172,17 @@ def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
                         error_message = error_data["error"]["message"]
                 except:
                     pass
+                print(f"Gemini API error (400): {error_message}")
+                print(f"Attempted URL: {url}")
+                print(f"Model ID: {model_id}")
+                
+                # Try with a stripped model name as a last resort
+                if "unexpected model name format" in error_message and "/" in model_id:
+                    model_id = model_id.split("/")[-1]
+                    print(f"Trying with simplified model ID: {model_id}")
+                    url = "https://generativelanguage.googleapis.com/v1/models/" + model_id + ":generateContent"
+                    continue
+                
                 raise Exception(f"Gemini API error (400): {error_message}")
             else:
                 raise Exception(f"Gemini API error: {response.status_code} - {response.text}")
