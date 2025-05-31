@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-from lib.video_texts import read_config_file
+from lib.config_utils import read_config_file
 
 def get_gemini_key():
     """Get Gemini API key from environment variable or config file"""

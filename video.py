@@ -1,5 +1,5 @@
 import argparse
-from lib.video_texts import update_config_file
+from lib.config_utils import update_config_file
 from lib.core import making_video
 
 parser = argparse.ArgumentParser(description='UnQTube - long video generator')

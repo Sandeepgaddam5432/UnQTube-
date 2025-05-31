@@ -4,7 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 import edge_tts
 from edge_tts import VoicesManager
-from lib.video_texts import read_config_file
+from lib.config_utils import read_config_file
 
 def generate_voice(text, outputfile, lang):
     loop = asyncio.new_event_loop()

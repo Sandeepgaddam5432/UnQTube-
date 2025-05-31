@@ -5,8 +5,9 @@ import re
 import requests
 from moviepy.editor import VideoFileClip, concatenate_videoclips, AudioFileClip, CompositeAudioClip
 
-from lib.video_texts import getyamll,read_config_file,read_random_line
-from lib.APIss import download_file,chatgpt,translateto,enhance_search_term
+from lib.video_texts import getyamll, read_random_line
+from lib.config_utils import read_config_file
+from lib.APIss import download_file, chatgpt, translateto, enhance_search_term
 from lib.voices import generate_voice
 from lib.language import get_language_code
 from lib.core import get_temp_dir

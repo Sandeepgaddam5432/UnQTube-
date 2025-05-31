@@ -2,9 +2,10 @@ import os
 import shutil
 import sys
 
-from lib.video_texts import get_names,process_text,getyamll,read_config_file,read_random_line
-from lib.image_procces import getim,delete_invalid_images,sortimage,shape_error
-from lib.APIss import download_file,chatgpt,translateto,enhance_search_term
+from lib.video_texts import get_names, process_text, getyamll, read_random_line
+from lib.config_utils import read_config_file
+from lib.image_procces import getim, delete_invalid_images, sortimage, shape_error
+from lib.APIss import download_file, chatgpt, translateto, enhance_search_term
 from lib.video_editor import mergevideo
 from lib.voices import generate_voice
 from lib.language import get_language_code

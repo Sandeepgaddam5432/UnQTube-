@@ -1,7 +1,8 @@
 import re
 import yaml
 import random
-from lib.APIss import chatgpt
+from lib.config_utils import read_config_file
+from lib.gemini_api import generate_script_with_gemini
 
 def read_random_line(filename):
     with open(filename, 'r') as file:
@@ -14,30 +15,11 @@ def getyamll(name):
         data = yaml.safe_load(file)    
     return data[name]
 
-def read_config_file(file_path="config.txt"):
-    config = {}
-    with open(file_path, 'r') as file:
-        for line in file:
-            key, value = line.strip().split(' = ')
-            config[key.strip()] = value.strip()
-    return config
-
-def update_config_file(file_path, variable_name, new_value):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-
-    with open(file_path, 'w') as file:
-        for line in lines:
-            key, value = line.strip().split(' = ')
-            if key.strip() == variable_name:
-                line = f"{key.strip()} = {new_value}\n"
-            file.write(line)
-
 def get_names(title):
     flag = True
     while(flag):
         prompt = getyamll("names_prompt").format(title=title)
-        message = chatgpt(prompt)
+        message = generate_ai_text(prompt)
         city_names_list = []
         start_index = message.find('[')
         end_index = message.find(']')
@@ -64,5 +46,13 @@ def process_text(text, keyword):
     else:
         result = text
     return result
+
+# Helper function to generate AI text without circular imports
+def generate_ai_text(prompt):
+    """Generate text using Gemini AI without circular imports"""
+    try:
+        return generate_script_with_gemini(prompt)
+    except Exception as e:
+        raise Exception(f"Error generating AI text: {e}")
 
 

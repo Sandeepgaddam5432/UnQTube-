@@ -3,15 +3,7 @@ import requests
 import urllib.parse
 from deep_translator import GoogleTranslator
 import os
-from lib.video_texts import read_config_file
-
-def read_config_file(file_path="config.txt"):
-    config = {}
-    with open(file_path, 'r') as file:
-        for line in file:
-            key, value = line.strip().split(' = ')
-            config[key.strip()] = value.strip()
-    return config
+from lib.config_utils import read_config_file
 
 #images API (Bing)
 def _extractBingImages(html):
