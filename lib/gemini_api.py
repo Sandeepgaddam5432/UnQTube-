@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import time
 from lib.config_utils import read_config_file
 
 def get_gemini_key():
@@ -12,26 +13,83 @@ def get_gemini_key():
     if not api_key:
         try:
             api_key = read_config_file().get('gemini_api', '')
-        except:
+        except Exception as e:
+            print(f"Warning: Could not read config file: {e}")
             api_key = ''
             
     return api_key
 
+def list_available_gemini_models(api_key=None):
+    """List all available Gemini models for the given API key
+    
+    Args:
+        api_key: Optional Gemini API key, if not provided will try to get from env/config
+        
+    Returns:
+        A list of available model names
+    """
+    if not api_key:
+        api_key = get_gemini_key()
+        
+    if not api_key:
+        print("Warning: No API key provided. Cannot list available models.")
+        # Return some default models that are likely available
+        return ["gemini-pro", "gemini-1.0-pro", "gemini-1.0-pro-vision"]
+        
+    url = f"https://generativelanguage.googleapis.com/v1/models"
+    
+    params = {
+        "key": api_key
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        
+        if response.status_code != 200:
+            print(f"Error listing models: {response.status_code} - {response.text}")
+            # Return some default models as fallback
+            return ["gemini-pro", "gemini-1.0-pro", "gemini-1.0-pro-vision"]
+            
+        result = response.json()
+        
+        # Extract just the model names
+        models = []
+        for model in result.get("models", []):
+            name = model.get("name", "")
+            # The name comes in format "models/gemini-pro" - we'll strip the "models/" prefix
+            if name.startswith("models/"):
+                name = name[7:]  # Remove "models/" prefix
+            if "gemini" in name.lower() and "generateContent" in model.get("supportedGenerationMethods", []):
+                models.append(name)
+                
+        if not models:
+            print("Warning: No Gemini models found for text generation")
+            # Return default models as fallback
+            return ["gemini-pro", "gemini-1.0-pro"]
+            
+        return models
+    except Exception as e:
+        print(f"Error fetching available models: {e}")
+        # Return default models as fallback
+        return ["gemini-pro", "gemini-1.0-pro", "gemini-1.0-pro-vision"]
+
 def get_gemini_model():
     """Get the selected Gemini model from config file or use default"""
     try:
-        model = read_config_file().get('gemini_model', 'gemini-1.5-flash-latest')
+        model = read_config_file().get('gemini_model', 'gemini-pro')
         return model
-    except:
+    except Exception as e:
+        print(f"Warning: Could not read model from config: {e}")
         # Default to a stable model if not specified
-        return 'gemini-1.5-flash-latest'
+        return 'gemini-pro'
 
-def generate_script_with_gemini(prompt, api_key=None):
+def generate_script_with_gemini(prompt, api_key=None, max_retries=3):
     """Generate script using Gemini API
     
     Args:
         prompt: The prompt to send to Gemini
         api_key: Optional Gemini API key, if not provided will try to get from env/config
+        max_retries: Maximum number of retries on failure
         
     Returns:
         The generated text from Gemini
@@ -45,8 +103,12 @@ def generate_script_with_gemini(prompt, api_key=None):
     # Get model from config or use default
     model_name = get_gemini_model()
     
-    # Use stable v1 API instead of v1beta
-    url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent"
+    # Add "models/" prefix if not present - this is required by the API
+    if not model_name.startswith("models/"):
+        model_name = f"models/{model_name}"
+    
+    # Use stable v1 API 
+    url = f"https://generativelanguage.googleapis.com/v1/{model_name}:generateContent"
     
     headers = {
         "Content-Type": "application/json",
@@ -74,33 +136,74 @@ def generate_script_with_gemini(prompt, api_key=None):
         }
     }
     
-    response = requests.post(url, headers=headers, params=params, json=data)
-    
-    if response.status_code != 200:
-        raise Exception(f"Gemini API error: {response.status_code} - {response.text}")
+    retries = 0
+    while retries < max_retries:
+        try:
+            response = requests.post(url, headers=headers, params=params, json=data)
+            
+            if response.status_code == 200:
+                result = response.json()
+                try:
+                    generated_text = result["candidates"][0]["content"]["parts"][0]["text"]
+                    return generated_text
+                except (KeyError, IndexError) as e:
+                    print(f"Error parsing Gemini response: {e}")
+                    print(f"Response structure: {json.dumps(result, indent=2)[:500]}...")
+                    raise Exception(f"Unexpected Gemini API response format: {e}")
+            elif response.status_code == 404:
+                # Model not found error - try with a different model
+                print(f"Model {model_name} not found. Attempting to use gemini-pro instead.")
+                model_name = "models/gemini-pro"
+                url = f"https://generativelanguage.googleapis.com/v1/{model_name}:generateContent"
+            elif response.status_code == 429:
+                # Rate limit - wait and retry
+                wait_time = min(2 ** retries, 60)  # Exponential backoff up to 60 seconds
+                print(f"Rate limit hit. Waiting {wait_time} seconds before retrying...")
+                time.sleep(wait_time)
+            elif response.status_code == 400:
+                error_message = "Invalid request"
+                try:
+                    error_data = response.json()
+                    if "error" in error_data and "message" in error_data["error"]:
+                        error_message = error_data["error"]["message"]
+                except:
+                    pass
+                raise Exception(f"Gemini API error (400): {error_message}")
+            else:
+                raise Exception(f"Gemini API error: {response.status_code} - {response.text}")
+        except requests.RequestException as e:
+            print(f"Request error: {e}")
+            if retries < max_retries - 1:
+                wait_time = min(2 ** retries, 60)
+                print(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                raise Exception(f"Failed to connect to Gemini API after {max_retries} attempts: {e}")
         
-    result = response.json()
+        retries += 1
     
-    # Extract the generated text from the response
-    try:
-        generated_text = result["candidates"][0]["content"]["parts"][0]["text"]
-        return generated_text
-    except (KeyError, IndexError):
-        raise Exception(f"Unexpected Gemini API response format: {result}")
+    raise Exception(f"Failed to get a valid response from Gemini API after {max_retries} attempts")
 
-def enhance_media_search_with_gemini(script, segment_count=5, api_key=None):
+def enhance_media_search_with_gemini(script, segment_count=5, api_key=None, max_retries=2):
     """Analyze a script and suggest better media search terms for each segment
     
     Args:
         script: The script to analyze
         segment_count: How many segments to divide the script into
         api_key: Optional Gemini API key
+        max_retries: Maximum number of retries on failure
         
     Returns:
         A list of suggested search terms for visuals
     """
     if not api_key:
         api_key = get_gemini_key()
+        
+    # If script is too long, truncate it to avoid token limits
+    max_script_length = 15000
+    if len(script) > max_script_length:
+        script = script[:max_script_length] + "..."
+        print(f"Warning: Script truncated to {max_script_length} characters for media search term generation")
         
     prompt = f"""
     Analyze this script and suggest {segment_count} specific, vivid visual search terms that would 
@@ -117,44 +220,77 @@ def enhance_media_search_with_gemini(script, segment_count=5, api_key=None):
     lighting, or composition when relevant.
     """
     
-    response = generate_script_with_gemini(prompt, api_key)
-    
-    # Try to parse the response as JSON
-    try:
-        # Extract JSON if it's wrapped in text or code blocks
-        if "```json" in response:
-            json_text = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            json_text = response.split("```")[1].strip()
-        else:
-            json_text = response.strip()
+    for attempt in range(max_retries):
+        try:
+            response = generate_script_with_gemini(prompt, api_key)
             
-        search_terms = json.loads(json_text)
-        
-        # Ensure we got a list of strings
-        if not isinstance(search_terms, list):
-            raise ValueError("Response is not a list")
-            
-        return search_terms
-    except (json.JSONDecodeError, ValueError):
-        # If parsing fails, try to extract terms using simple text processing
-        lines = response.strip().split('\n')
-        search_terms = []
-        
-        for line in lines:
-            line = line.strip()
-            if line and not line.startswith('#') and not line.startswith('//'):
-                # Remove numbering, quotes, and other common formatting
-                term = line.strip()
-                for char in ['"', "'", ':', '-', '*', '•', '[', ']', '1.', '2.', '3.', '4.', '5.']:
-                    term = term.replace(char, '').strip()
-                if term:
-                    search_terms.append(term)
+            # Try to parse the response as JSON
+            try:
+                # Extract JSON if it's wrapped in text or code blocks
+                if "```json" in response:
+                    json_text = response.split("```json")[1].split("```")[0].strip()
+                elif "```" in response:
+                    json_text = response.split("```")[1].strip()
+                else:
+                    json_text = response.strip()
                     
-        # Limit to requested segment count
-        return search_terms[:segment_count]
+                search_terms = json.loads(json_text)
+                
+                # Ensure we got a list of strings
+                if not isinstance(search_terms, list):
+                    raise ValueError("Response is not a list")
+                    
+                return search_terms
+            except (json.JSONDecodeError, ValueError) as e:
+                if attempt < max_retries - 1:
+                    print(f"Failed to parse JSON response ({e}). Retrying...")
+                    continue
+                    
+                # If parsing fails, try to extract terms using simple text processing
+                print(f"JSON parsing failed: {e}. Attempting text-based extraction...")
+                lines = response.strip().split('\n')
+                search_terms = []
+                
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith('#') and not line.startswith('//'):
+                        # Remove numbering, quotes, and other common formatting
+                        term = line.strip()
+                        for char in ['"', "'", ':', '-', '*', '•', '[', ']', '1.', '2.', '3.', '4.', '5.']:
+                            term = term.replace(char, '').strip()
+                        if term:
+                            search_terms.append(term)
+                
+                # If we found some terms, use them
+                if search_terms:
+                    print(f"Extracted {len(search_terms)} search terms through text parsing")
+                    return search_terms[:segment_count]
+                
+                # Last resort: generate generic search terms
+                print("Could not extract search terms. Using generic visuals...")
+                return [
+                    "professional high quality visual",
+                    "detailed clear image",
+                    "cinematic shot",
+                    "high resolution photograph",
+                    "professional stock footage"
+                ][:segment_count]
+                    
+        except Exception as e:
+            print(f"Error in search term generation (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                print("Using fallback generic search terms...")
+                return [
+                    "professional high quality visual",
+                    "detailed clear image", 
+                    "cinematic shot",
+                    "high resolution photograph",
+                    "professional stock footage"
+                ][:segment_count]
+            # Sleep before retry
+            time.sleep(2)
 
-def generate_top10_list(title, genre="", language="english", api_key=None):
+def generate_top10_list(title, genre="", language="english", api_key=None, max_retries=2):
     """
     Generate a top 10 list along with search terms for each item
     
@@ -163,6 +299,7 @@ def generate_top10_list(title, genre="", language="english", api_key=None):
         genre: Optional genre/category for additional context
         language: The language to generate the script in
         api_key: Optional Gemini API key
+        max_retries: Maximum number of retries on failure
         
     Returns:
         A dictionary containing:
@@ -184,49 +321,83 @@ def generate_top10_list(title, genre="", language="english", api_key=None):
     Make sure each item is concise but descriptive.
     """
     
-    try:
-        response = generate_script_with_gemini(list_prompt, api_key)
+    top10_items = None
+    for attempt in range(max_retries):
+        try:
+            response = generate_script_with_gemini(list_prompt, api_key)
+            
+            # Extract the JSON array
+            try:
+                if "```json" in response:
+                    json_text = response.split("```json")[1].split("```")[0].strip()
+                elif "```" in response:
+                    json_text = response.split("```")[1].strip()
+                else:
+                    json_text = response.strip()
+                    
+                top10_items = json.loads(json_text)
+                
+                if not isinstance(top10_items, list):
+                    raise ValueError("Response is not a list")
+                
+                # Ensure we have exactly 10 items
+                if len(top10_items) > 10:
+                    top10_items = top10_items[:10]
+                elif len(top10_items) < 10:
+                    # If we have fewer than 10 items, pad the list with generic items
+                    missing = 10 - len(top10_items)
+                    print(f"Warning: Only {len(top10_items)} items generated. Adding {missing} generic items.")
+                    for i in range(missing):
+                        top10_items.append(f"Item #{len(top10_items) + 1} for {title}")
+                
+                break  # Success, exit the retry loop
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"Error parsing JSON response for top 10 list: {e}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying (attempt {attempt+1}/{max_retries})...")
+                    time.sleep(1)
+                else:
+                    # Create a fallback list of 10 generic items
+                    print("Using generic fallback list of items...")
+                    top10_items = [f"Item #{i+1} for {title}" for i in range(10)]
+        except Exception as e:
+            print(f"Error generating top 10 list: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying (attempt {attempt+1}/{max_retries})...")
+                time.sleep(2)
+            else:
+                # Create a fallback list of 10 generic items
+                print("Using generic fallback list of items...")
+                top10_items = [f"Item #{i+1} for {title}" for i in range(10)]
+    
+    # Now get detailed content for each item along with search terms
+    result = {
+        "items": top10_items,
+        "segments": []
+    }
+    
+    for i, item in enumerate(top10_items, 1):
+        segment_prompt = f"""
+        Create engaging script content for item #{i} in a top 10 video about "{title}": "{item}".
         
-        # Extract the JSON array
-        if "```json" in response:
-            json_text = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            json_text = response.split("```")[1].strip()
-        else:
-            json_text = response.strip()
-            
-        top10_items = json.loads(json_text)
+        Also provide 2 specific visual search terms that would work well for finding stock footage or images
+        to accompany this segment.
         
-        if not isinstance(top10_items, list) or len(top10_items) != 10:
-            raise ValueError("Failed to generate a valid list of 10 items")
+        OUTPUT FORMAT:
+        Return a JSON object with these fields:
+        - "script": The script text explaining this item (about 3-4 sentences)
+        - "search_terms": Array of 2 visual search terms (be specific with visual details)
         
-        # Now get detailed content for each item along with search terms
-        result = {
-            "items": top10_items,
-            "segments": []
-        }
+        Example:
+        {{
+          "script": "Item explanation text here...",
+          "search_terms": ["specific visual term 1", "specific visual term 2"]
+        }}
         
-        for i, item in enumerate(top10_items, 1):
-            segment_prompt = f"""
-            Create engaging script content for item #{i} in a top 10 video about "{title}": "{item}".
-            
-            Also provide 2 specific visual search terms that would work well for finding stock footage or images
-            to accompany this segment.
-            
-            OUTPUT FORMAT:
-            Return a JSON object with these fields:
-            - "script": The script text explaining this item (about 3-4 sentences)
-            - "search_terms": Array of 2 visual search terms (be specific with visual details)
-            
-            Example:
-            {{
-              "script": "Item explanation text here...",
-              "search_terms": ["specific visual term 1", "specific visual term 2"]
-            }}
-            
-            Language: {language}
-            """
-            
+        Language: {language}
+        """
+        
+        try:
             segment_response = generate_script_with_gemini(segment_prompt, api_key)
             
             try:
@@ -239,22 +410,32 @@ def generate_top10_list(title, genre="", language="english", api_key=None):
                     json_text = segment_response.strip()
                     
                 segment_data = json.loads(json_text)
+                
+                # Ensure required fields are present
+                if "script" not in segment_data:
+                    segment_data["script"] = f"Item {i}: {item} is an excellent example of {title}."
+                if "search_terms" not in segment_data or not segment_data["search_terms"]:
+                    segment_data["search_terms"] = [f"{item} {genre}", f"{item} {title}"]
+                
                 result["segments"].append(segment_data)
             except (json.JSONDecodeError, ValueError) as e:
                 # Fallback if JSON parsing fails
-                print(f"Warning: Could not parse JSON for item {i}. Using raw text.")
+                print(f"Warning: Could not parse JSON for item {i}. Using raw text. Error: {e}")
                 result["segments"].append({
-                    "script": segment_response.strip(),
+                    "script": segment_response.strip() or f"Item {i}: {item} is an excellent example of {title}.",
                     "search_terms": [f"{item} {genre}", f"{item} {title}"]
                 })
-        
-        return result
+        except Exception as e:
+            print(f"Error generating content for item {i}: {e}")
+            # Use fallback content
+            result["segments"].append({
+                "script": f"Item {i}: {item} is an excellent example of {title}.",
+                "search_terms": [f"{item} {genre}", f"{item} {title}"]
+            })
     
-    except Exception as e:
-        print(f"Error generating top 10 list with Gemini: {e}")
-        raise
+    return result
 
-def generate_short_video_script(topic, duration_seconds=30, language="english", api_key=None):
+def generate_short_video_script(topic, duration_seconds=30, language="english", api_key=None, max_retries=2):
     """
     Generate a short video script with scene descriptions, text overlays, and search terms
     
@@ -263,6 +444,7 @@ def generate_short_video_script(topic, duration_seconds=30, language="english", 
         duration_seconds: Approximate duration in seconds
         language: Language to generate content in
         api_key: Optional Gemini API key
+        max_retries: Maximum number of retries on failure
         
     Returns:
         A dictionary containing the structured script with scenes and search terms
@@ -300,24 +482,63 @@ def generate_short_video_script(topic, duration_seconds=30, language="english", 
     Use {language} language for the text.
     """
     
-    try:
-        response = generate_script_with_gemini(prompt, api_key)
-        
-        # Extract the JSON
-        if "```json" in response:
-            json_text = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            json_text = response.split("```")[1].strip()
-        else:
-            json_text = response.strip()
+    for attempt in range(max_retries):
+        try:
+            response = generate_script_with_gemini(prompt, api_key)
             
-        script_data = json.loads(json_text)
-        return script_data
-        
-    except json.JSONDecodeError:
-        # Fallback if JSON parsing fails - create a simple structure from the raw text
-        print("Warning: Could not parse JSON for short video script. Using fallback parsing.")
-        
+            # Extract the JSON
+            try:
+                if "```json" in response:
+                    json_text = response.split("```json")[1].split("```")[0].strip()
+                elif "```" in response:
+                    json_text = response.split("```")[1].strip()
+                else:
+                    json_text = response.strip()
+                    
+                script_data = json.loads(json_text)
+                
+                # Validate and ensure required fields are present
+                if "scenes" not in script_data or not script_data["scenes"]:
+                    raise ValueError("No scenes found in script data")
+                
+                if "title" not in script_data:
+                    script_data["title"] = f"Short video about {topic}"
+                    
+                # Ensure each scene has the required fields
+                for i, scene in enumerate(script_data["scenes"]):
+                    if "visual_description" not in scene:
+                        scene["visual_description"] = f"Scene {i+1} for {topic}"
+                    if "text" not in scene:
+                        scene["text"] = f"Scene {i+1} about {topic}"
+                    if "search_terms" not in scene or not scene["search_terms"]:
+                        scene["search_terms"] = [scene["visual_description"], f"{topic} visual"]
+                
+                return script_data
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"Error parsing JSON response for short video: {e}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying (attempt {attempt+1}/{max_retries})...")
+                    time.sleep(1)
+                else:
+                    # Fallback if JSON parsing fails - create a simple structure from the raw text
+                    print("Using fallback parsing for short video script.")
+                    return _parse_short_video_fallback(response, topic, scene_count)
+        except Exception as e:
+            print(f"Error generating short video script: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying (attempt {attempt+1}/{max_retries})...")
+                time.sleep(2)
+            else:
+                # Create a fallback script
+                print("Creating fallback short video script...")
+                return _create_fallback_short_video_script(topic, scene_count)
+    
+    # This should not be reached due to the else clauses above, but just in case
+    return _create_fallback_short_video_script(topic, scene_count)
+
+def _parse_short_video_fallback(response, topic, scene_count=5):
+    """Parse a non-JSON short video script response"""
+    try:
         # Very basic fallback parser for [visual] text: "text" format
         scenes = []
         lines = response.strip().split('\n')
@@ -352,11 +573,71 @@ def generate_short_video_script(topic, duration_seconds=30, language="english", 
                 "text": current_text,
                 "search_terms": [current_visual, f"{topic} {current_visual}"]
             })
+        
+        # If we couldn't extract any scenes, create fallback
+        if not scenes:
+            return _create_fallback_short_video_script(topic, scene_count)
             
         return {
             "title": topic,
             "scenes": scenes
         }
     except Exception as e:
-        print(f"Error generating short video script with Gemini: {e}")
-        raise 
+        print(f"Error in fallback parsing: {e}")
+        return _create_fallback_short_video_script(topic, scene_count)
+
+def _create_fallback_short_video_script(topic, scene_count=5):
+    """Create a simple fallback script when all else fails"""
+    scenes = []
+    
+    # Generic scene descriptions for different topics
+    generic_scenes = [
+        {
+            "visual_description": "Close-up shot of the main subject",
+            "text": f"Discover the fascinating world of {topic}",
+            "search_terms": [f"close-up {topic}", "detailed view"]
+        },
+        {
+            "visual_description": "Wide angle establishing shot",
+            "text": f"What makes {topic} so special?",
+            "search_terms": [f"wide angle {topic}", "panoramic view"]
+        },
+        {
+            "visual_description": "Person demonstrating the concept",
+            "text": f"Here's what you need to know about {topic}",
+            "search_terms": ["person explaining", "demonstration"]
+        },
+        {
+            "visual_description": "Slow motion detail shot",
+            "text": f"The details that make {topic} unique",
+            "search_terms": ["slow motion details", "cinematic close up"]
+        },
+        {
+            "visual_description": "Before and after comparison",
+            "text": f"See the transformation with {topic}",
+            "search_terms": ["before and after", "comparison shot"]
+        },
+        {
+            "visual_description": "Overhead view of the scene",
+            "text": f"A different perspective on {topic}",
+            "search_terms": ["overhead view", "aerial perspective"]
+        }
+    ]
+    
+    # Use the generic scenes to fill our scene count
+    for i in range(min(scene_count, len(generic_scenes))):
+        scenes.append(generic_scenes[i])
+    
+    # If we need more scenes than we have in our template, duplicate with variations
+    while len(scenes) < scene_count:
+        base_scene = generic_scenes[len(scenes) % len(generic_scenes)]
+        scenes.append({
+            "visual_description": base_scene["visual_description"],
+            "text": f"Another interesting aspect of {topic}",
+            "search_terms": base_scene["search_terms"]
+        })
+    
+    return {
+        "title": f"Short video about {topic}",
+        "scenes": scenes
+    } 
