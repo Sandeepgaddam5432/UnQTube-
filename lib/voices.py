@@ -38,13 +38,18 @@ def generate_voice(text, outputfile, lang):
                     
                 voice_params = select_voice_parameters(text, content_type=content_type)
                 
+                # Get user-selected TTS model if specified
+                config = read_config_file()
+                tts_model = config.get('tts_model', voice_params.get("model", "gemini-2.5-flash-preview-tts"))
+                voice_name = config.get('tts_voice', voice_params.get("voice_name", "Kore"))
+                
                 # Generate audio with Gemini TTS
-                print(f"Using Gemini TTS for voice generation ({voice_params['model']}, {voice_params['voice_config']})")
+                print(f"Using Gemini TTS for voice generation ({tts_model}, {voice_name})")
                 generate_gemini_tts(
                     text, 
                     outputfile, 
-                    voice_config=voice_params.get("voice_config", "natural"),
-                    model=voice_params.get("model", "gemini-2.5-flash")
+                    voice_name=voice_name,
+                    model=tts_model
                 )
                 
                 # Create subtitle file for compatibility with video editor

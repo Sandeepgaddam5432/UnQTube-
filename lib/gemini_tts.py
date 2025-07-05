@@ -2,7 +2,7 @@
 Gemini TTS Module for UnQTube
 
 This module integrates Google's Gemini TTS API for high-quality voice generation.
-It provides functions for generating speech from text using the Gemini 2.5 API.
+It provides functions for generating speech from text using the Gemini TTS-specific models.
 """
 
 import os
@@ -41,38 +41,38 @@ def select_voice_parameters(text, content_type="default", segment_position=0.5):
         segment_position (float): Position in video (0-1 range)
         
     Returns:
-        dict: Voice parameters including model and voice_config
+        dict: Voice parameters including model and voice_name
     """
-    # Default parameters
+    # Default parameters - using TTS-specific models
     params = {
-        "model": "gemini-2.5-flash",
-        "voice_config": "natural"
+        "model": "gemini-2.5-flash-preview-tts",
+        "voice_name": "Kore"  # Default voice
     }
     
     # Special cases based on content type
     if content_type == "intro":
-        params["voice_config"] = "expressive"
-        params["model"] = "gemini-2.5-pro"
+        params["voice_name"] = "Puck"  # More upbeat for intros
+        params["model"] = "gemini-2.5-pro-preview-tts"
     elif content_type == "conclusion" or content_type == "outro":
-        params["voice_config"] = "expressive"
-        params["model"] = "gemini-2.5-pro"
+        params["voice_name"] = "Charon"  # More informative for conclusions
+        params["model"] = "gemini-2.5-pro-preview-tts"
     elif "question" in text.lower() or "?" in text:
-        params["voice_config"] = "casual"
+        params["voice_name"] = "Laomedeia"  # Upbeat for questions
     
     # Analyze text for emphasis or excitement
     if "!" in text or any(word in text.lower() for word in ["amazing", "incredible", "exciting"]):
-        params["voice_config"] = "expressive"
+        params["voice_name"] = "Fenrir"  # Excitable voice for exciting content
     
     return params
 
-def generate_gemini_tts(text, output_file, voice_config="natural", model="gemini-2.5-flash", max_retries=3):
+def generate_gemini_tts(text, output_file, voice_name="Kore", model="gemini-2.5-flash-preview-tts", max_retries=3):
     """Generate TTS audio using Gemini API
     
     Args:
         text (str): Text to convert to speech
         output_file (str): Path to save audio file
-        voice_config (str): Voice style (natural, casual, expressive)
-        model (str): Gemini model to use (gemini-2.5-flash or gemini-2.5-pro)
+        voice_name (str): Voice name to use (e.g., "Kore", "Puck", "Charon")
+        model (str): Gemini TTS model to use (gemini-2.5-flash-preview-tts or gemini-2.5-pro-preview-tts)
         max_retries (int): Maximum number of retries on failure
         
     Returns:
@@ -87,29 +87,23 @@ def generate_gemini_tts(text, output_file, voice_config="natural", model="gemini
         raise ValueError("Gemini API key not found. Please set GEMINI_API_KEY environment variable "
                          "or add 'gemini_api = YOUR_API_KEY' to config.txt")
     
-    # Determine model endpoint
-    if "pro" in model:
-        model_endpoint = "gemini-2.5-pro:generateContent" 
-    else:
-        model_endpoint = "gemini-2.5-flash:generateContent"
-        
-    # Create API URL
+    # Create API URL - using the correct TTS model endpoint
     base_url = "https://generativelanguage.googleapis.com/v1beta/models"
-    api_url = f"{base_url}/{model_endpoint}?key={api_key}"
+    api_url = f"{base_url}/{model}:generateContent?key={api_key}"
     
-    # Create payload
+    # Create payload with the correct structure for TTS models
     payload = {
         "contents": [{
             "parts": [{
-                "text": f"Generate speech for the following text: {text}"
+                "text": text  # Direct text input, not wrapped in a prompt
             }]
         }],
         "generationConfig": {
-            "response_modalities": ["AUDIO"],
-            "speech_config": {
-                "voice_config": {
-                    "prebuilt_voice_config": {
-                        "voice_name": voice_config
+            "responseModalities": ["AUDIO"],  # Specify audio output
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {
+                        "voiceName": voice_name
                     }
                 }
             }
@@ -126,7 +120,8 @@ def generate_gemini_tts(text, output_file, voice_config="natural", model="gemini
                 # Extract audio data
                 result = response.json()
                 try:
-                    audio_data = result["candidates"][0]["content"]["parts"][0]["audio_data"]
+                    # Updated path to extract audio data from the response
+                    audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
                     
                     # Decode and save audio
                     with open(output_file, "wb") as f:
@@ -159,7 +154,7 @@ def generate_gemini_tts(text, output_file, voice_config="natural", model="gemini
                 if attempt == max_retries - 1:
                     raise Exception(f"Gemini TTS API error after {max_retries} attempts: {error_message}")
                 
-                # Wait before retrying
+                # Wait before retrying with exponential backoff
                 wait_time = min(2 ** attempt, 30)
                 time.sleep(wait_time)
         except requests.RequestException as e:

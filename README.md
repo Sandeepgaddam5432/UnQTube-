@@ -1,96 +1,159 @@
-# 🎬UnQTube
-⚡Automating top 10 and short YouTube video maker with ChatGPT without API⚡
+# UnQTube - AI-Powered Video Generator
 
-UnQTube is an automated video creation tool that generates professional YouTube videos with minimal human input. It uses AI to generate scripts, download relevant stock media, create voiceovers, and combine everything into a final video.
+UnQTube is an advanced AI-powered video generation system that creates high-quality YouTube videos with minimal input. It uses sophisticated AI to generate scripts, narration, and visual content, then compiles everything into a complete video.
 
-## 🚀 Major New Features
+## 🌟 Features
 
-### High-Performance Video Generation
-The latest version features a drastically improved video generation pipeline that reduces creation time to under 5 minutes through:
-- **Parallel Processing**: Simultaneous media downloading, script generation, and voice synthesis
-- **Asynchronous Architecture**: Built with asyncio for maximum performance
-- **Content Caching**: Smart caching system to avoid redundant operations
+- **Intelligent Content Generation**: Multi-step AI prompt chains for sophisticated, factually accurate content
+- **Multiple AI Models**: Support for both Google Gemini and Anthropic Claude
+- **High-Quality TTS**: Google Gemini TTS integration with 30+ premium voices and context-aware voice selection
+- **Parallel Processing**: Asynchronous architecture for 3-5 minute video generation (vs 15-20 minutes previously)
+- **Multilingual Support**: Generate videos in multiple languages, including all major Indian languages
+- **User-Friendly Interface**: Both GUI and command-line options available
+- **Short & Long Video Support**: Create both traditional long-form and short-form vertical videos
 
-### Enhanced Content Quality
-- **Sophisticated Content Generation**: Multi-step prompt chain for highly detailed, engaging scripts
-- **Advanced Media Search**: More precise visual search terms for better stock footage
-- **Dynamic Hooks**: Auto-generation of compelling hooks for various parts of the video
+## 📊 Performance
 
-### Premium Audio with Gemini TTS
-- **High-Quality Voices**: Integration with Google's Gemini TTS models for realistic voiceovers
-- **Intelligent Voice Selection**: Context-aware voice parameter selection based on content
-- **Fallback System**: Graceful fallback to edge-tts if Gemini is unavailable
+- **Speed**: Generate complete videos in 3-5 minutes (vs 15-20 minutes in previous versions)
+- **Quality**: Sophisticated multi-step AI prompting creates more engaging, factual content
+- **Audio**: Premium voice quality with Gemini TTS and context-aware voice selection
 
-## Types of Videos
-UnQTube can generate two main types of videos:
-1. **Long-form "Top 10" videos** (5+ minutes in duration)
-2. **Short vertical videos** (30-60 seconds, designed for platforms like YouTube Shorts)
+## 🚀 Quick Start with Google Colab
 
-## Getting Started
+The easiest way to get started is using our ready-to-use Google Colab notebooks:
 
-### Prerequisites
-- Python 3.8 or higher
-- FFmpeg for video processing
-- Pexels API key (free)
-- Gemini API key (optional, for enhanced TTS)
+[![Open Long Video Generator In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sandeepgaddam5432/UnQTube/blob/main/UnQTube_Long_Video_Generator.ipynb) 
+[![Open Short Video Generator In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sandeepgaddam5432/UnQTube/blob/main/UnQTube_Short_Video_Generator.ipynb)
 
-### Installation
+## 🖥️ Local Installation
+
 1. Clone the repository:
+<<<<<<< HEAD
 ```bash
 git clone https://github.com/Sandeepgaddam5432/UnQTube.git
 cd UnQTube
 ```
+=======
+  ```bash
+  git clone https://github.com/Sandeepgaddam5432/UnQTube.git
+  cd UnQTube
+  ```
+>>>>>>> 669c038 (feat: Integrate Claude AI, fix Gemini TTS, and add advanced features)
 
-2. Install the required packages:
-```bash
-pip install -r requirements.txt
-```
+2. Install dependencies:
+  ```bash
+  pip install -r requirements.txt
+  ```
 
-3. Configure the application by editing the `config.txt` file or using the command-line options.
+3. Set up your API keys in `config.txt`:
+  ```
+  gemini_api = YOUR_GEMINI_API_KEY
+  pexels_api = YOUR_PEXELS_API_KEY
+  use_gemini = yes
+  claude_api = YOUR_CLAUDE_API_KEY  # Optional
+  use_claude = no  # Set to 'yes' to use Claude instead of Gemini
+  ```
 
-### Usage
+## 🎮 Usage
 
-#### Command Line Interface
-Generate a long-form video:
-```bash
-python video.py -topic "Best Travel Destinations in Europe" -general_topic "travel" -use_async yes
-```
+### GUI Mode
 
-Generate a short video:
-```bash
-python short.py -topic "Amazing Travel Facts" -time 30 -use_async yes
-```
-
-#### Graphical User Interface
-Run the GUI application:
+Run the graphical interface:
 ```bash
 python rungui.py
 ```
 
-## Configuration Options
-- **topic**: The main subject of your video
-- **general_topic**: The general category (e.g., travel, food, technology)
-- **time**: Duration in minutes for long videos or seconds for short videos
-- **intro_video**: Whether to use video (yes) or images (no) for the intro
-- **pexels_api**: Your Pexels API key for downloading stock media
-- **language**: Language for the video content and voiceover
-- **multi_speaker**: Use multiple voices in the video
-- **gemini_api**: Your Gemini API key for enhanced TTS (optional)
-- **use_gemini**: Enable/disable Gemini TTS (yes/no)
-- **use_async**: Use the high-performance async processing (yes/no)
+### Command Line Mode
 
-## Performance Comparison
-| Processing Mode | Average Video Generation Time |
-|-----------------|-------------------------------|
-| Legacy (Sync)   | 15-20 minutes                 |
-| New (Async)     | 3-5 minutes                   |
+Generate a long-form video:
+```bash
+python video.py "your video topic"
+```
 
-## License
+Generate a short-form video:
+```bash
+python short.py "your short video topic"
+```
+
+## 🔧 Configuration
+
+Edit `config.txt` to customize your settings:
+
+```
+general_topic = video game  # General category for context
+time = 5                    # Video length in minutes (for long videos)
+intro_video = no            # Use video for intro instead of photos
+pexels_api = YOUR_API_KEY   # Pexels API key for visuals
+language = english          # Video language
+multi_speaker = no          # Use multiple speakers
+use_gemini = yes            # Use Gemini for TTS
+gemini_api = YOUR_API_KEY   # Gemini API key
+text_model = gemini-1.5-flash-latest  # Text generation model
+tts_model = gemini-2.5-flash-preview-tts  # TTS model
+tts_voice = Kore            # TTS voice name
+use_claude = no             # Use Claude for content generation
+claude_api = YOUR_API_KEY   # Claude API key
+claude_model = claude-3-haiku-20240307  # Claude model
+```
+
+## 🤖 AI Model Options
+
+### Gemini Models
+UnQTube supports Google's Gemini AI for script generation and TTS:
+
+- **Text Generation Models**:
+  - `gemini-1.5-flash-latest` - Fast, efficient text generation
+  - `gemini-1.5-pro-latest` - Higher quality, more detailed content
+
+- **TTS Models**:
+  - `gemini-2.5-flash-preview-tts` - Fast TTS generation
+  - `gemini-2.5-pro-preview-tts` - Higher quality voice synthesis
+
+### Claude Models
+UnQTube now supports Anthropic's Claude AI as an alternative for content generation:
+
+- **Available Models**:
+  - `claude-3-haiku-20240307` - Fast, efficient text generation
+  - `claude-3-sonnet-20240229` - Balanced speed and quality
+  - `claude-3-opus-20240229` - Highest quality, most detailed content
+
+To use Claude, set `use_claude = yes` in your config.txt file and provide your Claude API key.
+
+## 🗣️ Supported Languages
+
+UnQTube now supports all major Indian languages, including:
+- Hindi, Bengali, Telugu, Marathi, Tamil
+- Urdu, Gujarati, Kannada, Malayalam, Punjabi
+- Assamese, Odia, and many more
+
+Plus dozens of other international languages.
+
+## 🎙️ Voice Options
+
+The Gemini TTS integration includes 30 premium voices with different characteristics:
+- **Kore** - Firm, authoritative
+- **Puck** - Upbeat, energetic
+- **Charon** - Informative, educational
+- **Fenrir** - Excitable, enthusiastic
+- **Enceladus** - Breathy, intimate
+- And many more to suit different content styles
+
+## 🛠️ Advanced Features
+
+- **Intelligent Rate Limiting**: Exponential backoff for API rate limits
+- **Caching System**: Improved performance through strategic caching
+- **JSON Validation**: Robust parsing with fallback mechanisms
+- **Parallel Processing**: Asynchronous architecture for faster generation
+
+## 📝 License
+
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgments
-- Thanks to Pexels for providing the stock media API
-- Special thanks to all contributors and testers
+## 🙏 Acknowledgements
+
+- [Pexels](https://www.pexels.com/) for providing the visual content API
+- [Google Gemini](https://ai.google.dev/) for the advanced AI capabilities
+- [Edge-TTS](https://github.com/rany2/edge-tts) for the fallback TTS system
 
 # 🎬UnQTube
 ⚡Automating top 10 and short YouTube video maker with ChatGPT without API⚡

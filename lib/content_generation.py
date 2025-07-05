@@ -14,6 +14,13 @@ from lib.media_api import translateto
 from lib.language import get_language_code
 from lib.config_utils import read_config_file
 
+# Import Claude API if available
+try:
+    from lib.claude_api import generate_script_with_claude, is_claude_available
+    CLAUDE_AVAILABLE = True
+except ImportError:
+    CLAUDE_AVAILABLE = False
+
 class PromptChain:
     """Advanced prompt chain for sophisticated content generation
     
@@ -35,6 +42,14 @@ class PromptChain:
         self.language_code = get_language_code(language)
         self.results = {}
         self.max_retries = 2
+        
+        # Determine which AI model to use
+        config = read_config_file()
+        self.use_claude = config.get('use_claude', 'no').lower() in ['yes', 'true', '1'] and CLAUDE_AVAILABLE
+        if self.use_claude:
+            print("Using Claude AI for content generation")
+        else:
+            print("Using Gemini AI for content generation")
         
     def _infer_genre(self, title):
         """Infer a general genre if none is provided"""
@@ -228,14 +243,38 @@ class PromptChain:
                 outline_result = await self._generate_content(prompt)
                 # Try to parse as JSON to validate
                 try:
+                    # Try to find and extract valid JSON if it's embedded in other text
+                    import re
+                    json_match = re.search(r'(\{[\s\S]*\})', outline_result)
+                    if json_match:
+                        json_str = json_match.group(1)
+                        try:
+                            outline_json = json.loads(json_str)
+                            if self._validate_outline(outline_json):
+                                return json.dumps(outline_json)
+                        except:
+                            pass
+                    
+                    # If that didn't work, try the original string
                     outline_json = json.loads(outline_result)
                     if self._validate_outline(outline_json):
                         return outline_result
                 except json.JSONDecodeError:
                     print(f"Could not parse outline as JSON, attempt {attempt+1}")
-                    if attempt == self.max_retries - 1:
-                        # Last attempt, try to extract usable content
-                        return self._extract_outline_fallback(outline_result)
+                    # Try to fix common JSON formatting issues
+                    try:
+                        # Replace single quotes with double quotes
+                        fixed_json = outline_result.replace("'", '"')
+                        # Fix unquoted keys
+                        fixed_json = re.sub(r'(\s*?)(\w+)(\s*?):', r'\1"\2"\3:', fixed_json)
+                        # Try to parse the fixed JSON
+                        outline_json = json.loads(fixed_json)
+                        if self._validate_outline(outline_json):
+                            return json.dumps(outline_json)
+                    except:
+                        if attempt == self.max_retries - 1:
+                            # Last attempt, try to extract usable content
+                            return self._extract_outline_fallback(outline_result)
             except Exception as e:
                 print(f"Outline generation attempt {attempt+1} failed: {e}")
                 if attempt == self.max_retries - 1:
@@ -528,12 +567,36 @@ class PromptChain:
             hooks_result = await self._generate_content(prompt)
             # Try to parse as JSON to validate
             try:
+                # Try to find and extract valid JSON if it's embedded in other text
+                import re
+                json_match = re.search(r'(\{[\s\S]*\})', hooks_result)
+                if json_match:
+                    json_str = json_match.group(1)
+                    try:
+                        hooks_json = json.loads(json_str)
+                        if all(key in hooks_json for key in ["opening_hook", "finale_hook", "subscription_hook"]):
+                            return json.dumps(hooks_json)
+                    except:
+                        pass
+                
+                # If that didn't work, try the original string
                 hooks_json = json.loads(hooks_result)
                 # Basic validation
                 if all(key in hooks_json for key in ["opening_hook", "finale_hook", "subscription_hook"]):
                     return hooks_result
             except json.JSONDecodeError:
-                print("Could not parse hooks as JSON, creating fallback")
+                print("Could not parse hooks as JSON, attempting to fix...")
+                try:
+                    # Replace single quotes with double quotes
+                    fixed_json = hooks_result.replace("'", '"')
+                    # Fix unquoted keys
+                    fixed_json = re.sub(r'(\s*?)(\w+)(\s*?):', r'\1"\2"\3:', fixed_json)
+                    # Try to parse the fixed JSON
+                    hooks_json = json.loads(fixed_json)
+                    if all(key in hooks_json for key in ["opening_hook", "finale_hook", "subscription_hook"]):
+                        return json.dumps(hooks_json)
+                except:
+                    print("Could not parse hooks as JSON, creating fallback")
         except Exception as e:
             print(f"Error creating hooks: {e}")
             
@@ -599,12 +662,43 @@ class PromptChain:
                 if array_match:
                     search_terms_json = json.loads(array_match.group(0))
                 else:
-                    search_terms_json = json.loads(search_terms_result)
+                    # Try to extract array from text that might contain explanations
+                    array_match = re.search(r'(\[[\s\S]*?\])', search_terms_result)
+                    if array_match:
+                        try:
+                            search_terms_json = json.loads(array_match.group(1))
+                        except:
+                            # Try the full string
+                            search_terms_json = json.loads(search_terms_result)
+                    else:
+                        search_terms_json = json.loads(search_terms_result)
                 
                 if isinstance(search_terms_json, list) and len(search_terms_json) > 0:
                     return json.dumps(search_terms_json)
             except json.JSONDecodeError:
-                print("Could not parse search terms as JSON, creating fallback")
+                print("Could not parse search terms as JSON, attempting to fix...")
+                try:
+                    # Try to extract terms manually
+                    terms = []
+                    # Look for quoted strings
+                    quoted_strings = re.findall(r'"([^"]*)"', search_terms_result)
+                    if quoted_strings:
+                        terms = quoted_strings
+                    else:
+                        # Try to extract lines that might be search terms
+                        lines = search_terms_result.split('\n')
+                        for line in lines:
+                            # Look for lines that start with numbers, bullets, etc.
+                            if re.match(r'^[\d\.\-\*]\s+(.+)$', line.strip()):
+                                term = re.sub(r'^[\d\.\-\*]\s+', '', line.strip())
+                                if term and len(term) > 5:  # Avoid very short terms
+                                    terms.append(term)
+                    
+                    if terms:
+                        return json.dumps(terms)
+                    print("Could not parse search terms as JSON, creating fallback")
+                except:
+                    print("Could not parse search terms as JSON, creating fallback")
         except Exception as e:
             print(f"Error generating search terms: {e}")
             
@@ -648,12 +742,37 @@ class PromptChain:
                 outline_result = await self._generate_content(prompt)
                 # Try to parse as JSON to validate
                 try:
+                    # Try to find and extract valid JSON if it's embedded in other text
+                    import re
+                    json_match = re.search(r'(\{[\s\S]*\})', outline_result)
+                    if json_match:
+                        json_str = json_match.group(1)
+                        try:
+                            outline_json = json.loads(json_str)
+                            if "hook" in outline_json and "points" in outline_json:
+                                return json.dumps(outline_json)
+                        except:
+                            pass
+                    
+                    # If that didn't work, try the original string
                     outline_json = json.loads(outline_result)
                     # Basic validation
                     if "hook" in outline_json and "points" in outline_json:
                         return outline_result
                 except json.JSONDecodeError:
                     print(f"Could not parse short outline as JSON, attempt {attempt+1}")
+                    # Try to fix common JSON formatting issues
+                    try:
+                        # Replace single quotes with double quotes
+                        fixed_json = outline_result.replace("'", '"')
+                        # Fix unquoted keys
+                        fixed_json = re.sub(r'(\s*?)(\w+)(\s*?):', r'\1"\2"\3:', fixed_json)
+                        # Try to parse the fixed JSON
+                        outline_json = json.loads(fixed_json)
+                        if "hook" in outline_json and "points" in outline_json:
+                            return json.dumps(outline_json)
+                    except:
+                        pass
             except Exception as e:
                 print(f"Short outline generation attempt {attempt+1} failed: {e}")
                 
@@ -945,36 +1064,44 @@ class PromptChain:
         return output
     
     async def _generate_content(self, prompt):
-        """Generate content using the appropriate AI model
+        """Generate content using the selected AI model
+        
+        This function uses either Gemini or Claude based on configuration.
         
         Args:
             prompt (str): The prompt to send to the AI
             
         Returns:
-            str: The generated content
+            str: Generated content from the AI
         """
-        # Check if we need to translate the prompt
-        if self.language != "english":
-            try:
-                translated_prompt = translateto(prompt, self.language_code)
-                prompt = translated_prompt
-            except Exception as e:
-                print(f"Error translating prompt: {e}")
-                # Continue with English prompt if translation fails
-        
-        # Generate content using Gemini
-        content = await asyncio.to_thread(generate_script_with_gemini, prompt)
-        
-        # Translate back to the target language if needed
-        if self.language != "english" and content:
-            try:
-                translated_content = translateto(content, self.language_code)
-                return translated_content
-            except Exception as e:
-                print(f"Error translating content: {e}")
-                # Return untranslated content if translation fails
+        try:
+            # Use Claude if configured and available
+            if self.use_claude:
+                # Get Claude model from config or use default
+                config = read_config_file()
+                claude_model = config.get('claude_model', 'claude-3-haiku-20240307')
                 
-        return content
+                # Generate content with Claude
+                return await generate_script_with_claude(prompt, model=claude_model)
+            else:
+                # Use Gemini (default)
+                return await generate_script_with_gemini(prompt)
+        except Exception as e:
+            print(f"Error generating content: {e}")
+            
+            # If one AI fails, try the other as fallback
+            try:
+                if self.use_claude:
+                    print("Claude API failed. Falling back to Gemini...")
+                    return await generate_script_with_gemini(prompt)
+                elif CLAUDE_AVAILABLE:
+                    print("Gemini API failed. Trying Claude as fallback...")
+                    return await generate_script_with_claude(prompt)
+            except Exception as fallback_error:
+                print(f"Fallback also failed: {fallback_error}")
+                
+            # If all attempts fail, raise the original error
+            raise e
 
 
 async def generate_top10_content(title, genre="", language="english"):

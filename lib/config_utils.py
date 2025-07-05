@@ -10,50 +10,280 @@ import json
 import time
 import pickle
 import hashlib
+import random
+import threading
+from functools import lru_cache
 
-def read_config_file(config_file='config.txt'):
-    """
-    Read a configuration file and return its contents as a dictionary.
+# Global cache for API responses
+_response_cache = {}
+_cache_lock = threading.Lock()
+
+# Rate limiting state
+_rate_limit_state = {
+    "gemini_api": {
+        "last_request_time": 0,
+        "backoff_time": 0.5,  # Initial backoff in seconds
+        "max_backoff": 30,    # Maximum backoff in seconds
+        "requests_count": 0,
+        "rate_limit_hit": False
+    },
+    "claude_api": {
+        "last_request_time": 0,
+        "backoff_time": 0.5,  # Initial backoff in seconds
+        "max_backoff": 30,    # Maximum backoff in seconds
+        "requests_count": 0,
+        "rate_limit_hit": False
+    },
+    "pexels_api": {
+        "last_request_time": 0,
+        "backoff_time": 0.5,
+        "max_backoff": 15,
+        "requests_count": 0,
+        "rate_limit_hit": False
+    }
+}
+_rate_limit_lock = threading.Lock()
+
+def read_config_file(filename="config.txt"):
+    """Read configuration from file
     
     Args:
-        config_file: The name of the configuration file to read.
+        filename (str): Path to the configuration file
         
     Returns:
-        dict: A dictionary containing the configuration values.
+        dict: Configuration values as a dictionary
     """
     config = {}
     try:
-        with open(config_file, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    config[key.strip()] = value.strip()
-    except FileNotFoundError:
-        # Return empty config if file doesn't exist
-        pass
+        if os.path.exists(filename):
+            with open(filename, "r", encoding="utf-8") as file:
+                for line in file:
+                    line = line.strip()
+                    if line and "=" in line and not line.startswith("#"):
+                        key, value = line.split("=", 1)
+                        config[key.strip()] = value.strip()
     except Exception as e:
-        print(f"Error reading config file: {e}")
+        print(f"Error reading config file {filename}: {e}")
     return config
 
-def update_config_file(config_file, key, value):
-    """
-    Update a key-value pair in a configuration file.
+def update_config_file(filename, key, value):
+    """Update a specific key in the configuration file
     
     Args:
-        config_file: The name of the configuration file to update.
-        key: The key to update.
-        value: The new value for the key.
+        filename (str): Path to the configuration file
+        key (str): Configuration key to update
+        value (str): New value for the key
     """
-    config = read_config_file(config_file)
+    config = read_config_file(filename)
     config[key] = value
     
     try:
-        with open(config_file, 'w') as f:
+        with open(filename, "w", encoding="utf-8") as file:
             for k, v in config.items():
-                f.write(f"{k} = {v}\n")
+                file.write(f"{k} = {v}\n")
     except Exception as e:
-        print(f"Error updating config file: {e}")
+        print(f"Error updating config file {filename}: {e}")
+
+@lru_cache(maxsize=128)
+def get_cached_config(filename="config.txt"):
+    """Get cached configuration
+    
+    This function uses Python's lru_cache decorator to cache the configuration
+    and avoid repeated file reads.
+    
+    Args:
+        filename (str): Path to the configuration file
+        
+    Returns:
+        dict: Configuration values as a dictionary
+    """
+    return read_config_file(filename)
+
+def cache_response(key, response, ttl=3600):
+    """Cache an API response
+    
+    Args:
+        key (str): Cache key
+        response: Response data to cache
+        ttl (int): Time to live in seconds (default: 1 hour)
+    """
+    with _cache_lock:
+        _response_cache[key] = {
+            "data": response,
+            "expires": time.time() + ttl
+        }
+
+def get_cached_response(key):
+    """Get a cached API response
+    
+    Args:
+        key (str): Cache key
+        
+    Returns:
+        The cached response or None if not found or expired
+    """
+    with _cache_lock:
+        if key in _response_cache:
+            cache_entry = _response_cache[key]
+            if time.time() < cache_entry["expires"]:
+                return cache_entry["data"]
+            else:
+                # Remove expired entry
+                del _response_cache[key]
+    return None
+
+def clear_cache():
+    """Clear all cached responses"""
+    with _cache_lock:
+        _response_cache.clear()
+
+def intelligent_rate_limit_handling(retry_after=None, api_type=None):
+    """Handle rate limits intelligently with retry-after support
+    
+    This function implements a smart rate limiting strategy that:
+    1. Respects server-provided retry-after headers when available
+    2. Uses exponential backoff when no retry-after is provided
+    3. Adds jitter to prevent thundering herd problems
+    
+    Args:
+        retry_after (int): Retry-after value from API response header (seconds)
+        api_type (str): API type identifier (e.g., 'gemini_api', 'claude_api')
+        
+    Returns:
+        float: The actual sleep time used (seconds)
+    """
+    # If no API type specified, use a default backoff
+    if not api_type:
+        sleep_time = retry_after if retry_after else random.uniform(1, 3)
+        time.sleep(sleep_time)
+        return sleep_time
+        
+    with _rate_limit_lock:
+        if api_type not in _rate_limit_state:
+            # Unknown API type, use simple backoff
+            sleep_time = retry_after if retry_after else 1.0
+            time.sleep(sleep_time)
+            return sleep_time
+            
+        state = _rate_limit_state[api_type]
+        state["rate_limit_hit"] = True
+        
+        # If we have a retry-after header, use it (with small jitter)
+        if retry_after:
+            # Add small jitter (±10%) to avoid thundering herd
+            jitter_factor = random.uniform(0.9, 1.1)
+            sleep_time = retry_after * jitter_factor
+            
+            # Update state to reflect this explicit backoff
+            state["backoff_time"] = min(retry_after, state["max_backoff"])
+        else:
+            # No retry-after, use exponential backoff
+            # Double the backoff time (with max limit)
+            state["backoff_time"] = min(state["backoff_time"] * 2, state["max_backoff"])
+            
+            # Add jitter (±20%) to avoid thundering herd
+            jitter_factor = random.uniform(0.8, 1.2)
+            sleep_time = state["backoff_time"] * jitter_factor
+        
+        # Sleep for the calculated time
+        print(f"Rate limit hit for {api_type}. Backing off for {sleep_time:.2f} seconds...")
+        time.sleep(sleep_time)
+        return sleep_time
+
+def should_throttle_request(api_type):
+    """Check if a request should be throttled based on rate limits
+    
+    This implements an exponential backoff strategy for rate limiting.
+    
+    Args:
+        api_type (str): API type (e.g., 'gemini_api', 'pexels_api')
+        
+    Returns:
+        tuple: (should_throttle, wait_time) - whether to throttle and how long to wait
+    """
+    with _rate_limit_lock:
+        if api_type not in _rate_limit_state:
+            return False, 0
+            
+        state = _rate_limit_state[api_type]
+        current_time = time.time()
+        elapsed = current_time - state["last_request_time"]
+        
+        # If we've hit a rate limit recently, use exponential backoff
+        if state["rate_limit_hit"]:
+            if elapsed < state["backoff_time"]:
+                return True, state["backoff_time"] - elapsed
+            else:
+                # Reset rate limit hit flag but keep backoff time for next hit
+                state["rate_limit_hit"] = False
+        
+        # Simple request counting - if we're making too many requests in a short time
+        if state["requests_count"] > 10 and elapsed < 1.0:
+            # Add small jitter to avoid thundering herd
+            jitter = random.uniform(0.1, 0.5)
+            return True, 1.0 - elapsed + jitter
+            
+        # Update state
+        state["last_request_time"] = current_time
+        state["requests_count"] += 1
+        
+        # Reset request count periodically
+        if elapsed > 5.0:
+            state["requests_count"] = 1
+            
+        return False, 0
+
+def handle_rate_limit_hit(api_type):
+    """Handle a rate limit being hit
+    
+    This increases the backoff time exponentially.
+    
+    Args:
+        api_type (str): API type (e.g., 'gemini_api', 'pexels_api')
+        
+    Returns:
+        float: The new backoff time in seconds
+    """
+    with _rate_limit_lock:
+        if api_type not in _rate_limit_state:
+            return 1.0
+            
+        state = _rate_limit_state[api_type]
+        state["rate_limit_hit"] = True
+        
+        # Increase backoff time exponentially
+        state["backoff_time"] = min(state["backoff_time"] * 2, state["max_backoff"])
+        
+        # Add small random jitter to avoid all clients retrying at the same time
+        jitter = random.uniform(0, 0.5)
+        backoff_with_jitter = state["backoff_time"] + jitter
+        
+        return backoff_with_jitter
+
+def reset_rate_limit_state(api_type=None):
+    """Reset rate limit state
+    
+    Args:
+        api_type (str, optional): API type to reset. If None, reset all.
+    """
+    with _rate_limit_lock:
+        if api_type is None:
+            # Reset all API states
+            for api in _rate_limit_state:
+                _rate_limit_state[api].update({
+                    "last_request_time": 0,
+                    "backoff_time": 0.5,
+                    "requests_count": 0,
+                    "rate_limit_hit": False
+                })
+        elif api_type in _rate_limit_state:
+            # Reset specific API state
+            _rate_limit_state[api_type].update({
+                "last_request_time": 0,
+                "backoff_time": 0.5,
+                "requests_count": 0,
+                "rate_limit_hit": False
+            })
 
 class CacheManager:
     """

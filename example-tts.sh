@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Gemini 2.5 TTS API Configuration
-API_KEY="AIzaSyDaiPi28dBK7Yu6fzXFCkTciTrbs47FgSU"
+API_KEY="AIz...."
 BASE_URL="https://generativelanguage.googleapis.com/v1beta/models"
 
 # Available TTS Models

@@ -11,3 +11,4 @@ opencv-python
 pydub
 aiohttp>=3.8.5
 async-timeout>=4.0.3
+anthropic>=0.5.0
