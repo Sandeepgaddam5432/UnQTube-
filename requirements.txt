@@ -2,10 +2,12 @@ edge-tts==7.0.2
 moviepy
 numpy
 pillow
-requests
+requests>=2.31.0
 asyncio
 argparse
 deep-translator
 pyyaml
 opencv-python
 pydub
+aiohttp>=3.8.5
+async-timeout>=4.0.3

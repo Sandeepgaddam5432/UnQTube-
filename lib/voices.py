@@ -8,6 +8,65 @@ from edge_tts import VoicesManager
 from lib.config_utils import read_config_file
 
 def generate_voice(text, outputfile, lang):
+    """Generate voice using TTS system
+    
+    This function first attempts to use Gemini TTS if configured,
+    and falls back to edge-tts if Gemini is unavailable or fails.
+    
+    Args:
+        text (str): Text to convert to speech
+        outputfile (str): Path to save the audio file
+        lang (str): Language code for the voice
+        
+    Returns:
+        str: Path to the generated audio file
+    """
+    try:
+        # First attempt with Gemini TTS if configured to use it
+        use_gemini = read_config_file().get('use_gemini', 'no').lower() in ['yes', 'true', '1']
+        if use_gemini:
+            try:
+                # Import here to avoid circular imports
+                from lib.gemini_tts import generate_gemini_tts, select_voice_parameters, create_subtitle_file
+                
+                # Determine voice parameters based on text content
+                content_type = "default"
+                if "introduction" in text.lower() or "welcome" in text.lower():
+                    content_type = "intro"
+                elif "conclusion" in text.lower() or "thank you" in text.lower():
+                    content_type = "outro"
+                    
+                voice_params = select_voice_parameters(text, content_type=content_type)
+                
+                # Generate audio with Gemini TTS
+                print(f"Using Gemini TTS for voice generation ({voice_params['model']}, {voice_params['voice_config']})")
+                generate_gemini_tts(
+                    text, 
+                    outputfile, 
+                    voice_config=voice_params.get("voice_config", "natural"),
+                    model=voice_params.get("model", "gemini-2.5-flash")
+                )
+                
+                # Create subtitle file for compatibility with video editor
+                create_subtitle_file(outputfile, text)
+                
+                print(f"Gemini TTS generated: {outputfile}")
+                return outputfile
+            except Exception as e:
+                print(f"Gemini TTS failed: {e}")
+                print("Falling back to edge-tts...")
+    except Exception as e:
+        print(f"Error checking for Gemini TTS: {e}")
+        print("Proceeding with edge-tts...")
+        
+    # Fall back to original edge-tts implementation
+    return _legacy_generate_voice(text, outputfile, lang)
+
+def _legacy_generate_voice(text, outputfile, lang):
+    """Legacy voice generation using edge-tts
+    
+    This is the original implementation, kept as a fallback
+    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:

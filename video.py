@@ -1,40 +1,83 @@
 import argparse
-from lib.config_utils import update_config_file
+import asyncio
 from lib.core import making_video
+from lib.async_core import make_video_async, cleanup
+from lib.config_utils import read_config_file
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description='UnQTube - long video generator')
-parser.add_argument('-topic', dest='topic', type=str, help='Enter video topic. Example: survival video game')
-parser.add_argument('-general_topic', dest='general_topic', type=str, help='general topic you want to make a video about.Example: video game, food, city, person and...')
-parser.add_argument('-time', dest='time', type=str, help='video time in minute')
-parser.add_argument('-intro_video', dest='intro_video', type=str, help='do you want intro with video instead photo?')
-parser.add_argument('-pexels_api', dest='pexels_api', type=str, help='get API from www.pexels.com')
-parser.add_argument('-language', dest='language', type=str, help='video language')
-parser.add_argument('-multi_speaker', dest='multi_speaker', type=str, help='Use multiple speakers in video')
-parser.add_argument('-gemini_api', dest='gemini_api', type=str, help='Gemini API key for enhanced script generation')
+def parse_args():
+	parser = argparse.ArgumentParser(description='Create a top 10 video')
+	parser.add_argument('-topic', type=str, help='topic of video', default='survival video game')
+	parser.add_argument('-general_topic', type=str, help='general topic of video', default='video game')
+	parser.add_argument('-time', type=str, help='time of video in minutes', default='5')
+	parser.add_argument('-intro_video', type=str, help='introduction has video instead photo?', default='no')
+	parser.add_argument('-pexels_api', type=str, help='pexels api', default='')
+	parser.add_argument('-language', type=str, help='language of video', default='english')
+	parser.add_argument('-multi_speaker', type=str, help='use multi speaker', default='no')
+	parser.add_argument('-use_async', type=str, help='use async processing (yes/no)', default='yes')
+	return parser.parse_args()
 
-args = parser.parse_args()
+async def main_async():
+	args = parse_args()
+	try:
+		# Import update_config_file from the correct module
+		from lib.config_utils import update_config_file
+		
+		# Update config if pexels_api is provided
+		if args.pexels_api:
+			update_config_file('config.txt', 'pexels_api', args.pexels_api)
 
-# Update config file with provided arguments
-if args.general_topic is not None:
-	update_config_file('config.txt', 'general_topic', args.general_topic)
-if args.time is not None:
-	update_config_file('config.txt', 'time', args.time)
-if args.intro_video is not None:	
-	update_config_file('config.txt', 'intro_video', args.intro_video)
-if args.pexels_api is not None:
-	update_config_file('config.txt', 'pexels_api', args.pexels_api)
-if args.language is not None:
-	update_config_file('config.txt', 'language', args.language)
-if args.multi_speaker is not None:
-	update_config_file('config.txt', 'multi_speaker', args.multi_speaker)
-if args.gemini_api is not None:
-	update_config_file('config.txt', 'gemini_api', args.gemini_api)
-	# Enable Gemini if API key is provided
-	update_config_file('config.txt', 'use_gemini', 'yes')
+		# Update other config values
+		update_config_file('config.txt', 'general_topic', args.general_topic)
+		update_config_file('config.txt', 'time', args.time)
+		update_config_file('config.txt', 'intro_video', args.intro_video)
+		update_config_file('config.txt', 'language', args.language)
+		update_config_file('config.txt', 'multi_speaker', args.multi_speaker)
+		
+		# Use async version if requested (default)
+		if args.use_async.lower() in ['yes', 'y', 'true', '1']:
+			print("\nUsing high-performance asynchronous processing\n")
+			await make_video_async(args.topic, args.general_topic)
+		else:
+			print("\nUsing legacy synchronous processing\n")
+			# Run legacy version in thread to avoid blocking the event loop
+			await asyncio.to_thread(making_video, args.topic, args.general_topic)
+	except Exception as e:
+		print(f"Error: {e}")
+	finally:
+		# Clean up temp files
+		cleanup()
 
-# Start video creation if topic is provided
-if args.topic is not None:
-	making_video(args.topic)
-else:
-	print('Please enter a topic with "-topic"')		
+def main():
+	args = parse_args()
+	
+	# For backward compatibility, use the legacy synchronous version
+	try:
+		# Import update_config_file from the correct module
+		from lib.config_utils import update_config_file
+		
+		# Update config if pexels_api is provided
+		if args.pexels_api:
+			update_config_file('config.txt', 'pexels_api', args.pexels_api)
+			
+		# Update other config values
+		update_config_file('config.txt', 'general_topic', args.general_topic)
+		update_config_file('config.txt', 'time', args.time)
+		update_config_file('config.txt', 'intro_video', args.intro_video)
+		update_config_file('config.txt', 'language', args.language)
+		update_config_file('config.txt', 'multi_speaker', args.multi_speaker)
+		
+		# Check if we should use async version
+		if args.use_async.lower() in ['yes', 'y', 'true', '1']:
+			print("\nUsing high-performance asynchronous processing\n")
+			asyncio.run(make_video_async(args.topic, args.general_topic))
+		else:
+			print("\nUsing legacy synchronous processing\n")
+			making_video(args.topic, args.general_topic)
+	except Exception as e:
+		print(f"Error: {e}")
+	finally:
+		# Clean up temp files
+		cleanup()
+
+if __name__ == '__main__':
+	main()		
