@@ -37,7 +37,7 @@ UnQTube can generate two main types of videos:
 ### Installation
 1. Clone the repository:
 ```bash
-git clone https://github.com/username/UnQTube.git
+git clone https://github.com/Sandeepgaddam5432/UnQTube.git
 cd UnQTube
 ```
 
