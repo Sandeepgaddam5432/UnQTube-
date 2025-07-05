@@ -5,7 +5,7 @@ UnQTube is an advanced AI-powered video generation system that creates high-qual
 ## 🌟 Features
 
 - **Intelligent Content Generation**: Multi-step AI prompt chains for sophisticated, factually accurate content
-- **Multiple AI Models**: Support for both Google Gemini and Anthropic Claude
+- **Google Gemini AI**: Advanced AI content generation with Google's state-of-the-art models
 - **High-Quality TTS**: Google Gemini TTS integration with 30+ premium voices and context-aware voice selection
 - **Parallel Processing**: Asynchronous architecture for 3-5 minute video generation (vs 15-20 minutes previously)
 - **Multilingual Support**: Generate videos in multiple languages, including all major Indian languages
@@ -22,23 +22,16 @@ UnQTube is an advanced AI-powered video generation system that creates high-qual
 
 The easiest way to get started is using our ready-to-use Google Colab notebooks:
 
-[![Open Long Video Generator In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sandeepgaddam5432/UnQTube/blob/main/UnQTube_Long_Video_Generator.ipynb) 
-[![Open Short Video Generator In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sandeepgaddam5432/UnQTube/blob/main/UnQTube_Short_Video_Generator.ipynb)
+[![Open Long Video Generator In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sandeepgaddam5432/UnQTube-/blob/main/UnQTube_Long_Video_Generator.ipynb) 
+[![Open Short Video Generator In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sandeepgaddam5432/UnQTube-/blob/main/UnQTube_Short_Video_Generator.ipynb)
 
 ## 🖥️ Local Installation
 
 1. Clone the repository:
-<<<<<<< HEAD
-```bash
-git clone https://github.com/Sandeepgaddam5432/UnQTube.git
-cd UnQTube
-```
-=======
   ```bash
-  git clone https://github.com/Sandeepgaddam5432/UnQTube.git
-  cd UnQTube
+  git clone https://github.com/Sandeepgaddam5432/UnQTube-.git
+  cd UnQTube-
   ```
->>>>>>> 669c038 (feat: Integrate Claude AI, fix Gemini TTS, and add advanced features)
 
 2. Install dependencies:
   ```bash
@@ -50,8 +43,7 @@ cd UnQTube
   gemini_api = YOUR_GEMINI_API_KEY
   pexels_api = YOUR_PEXELS_API_KEY
   use_gemini = yes
-  claude_api = YOUR_CLAUDE_API_KEY  # Optional
-  use_claude = no  # Set to 'yes' to use Claude instead of Gemini
+
   ```
 
 ## 🎮 Usage
@@ -91,9 +83,7 @@ gemini_api = YOUR_API_KEY   # Gemini API key
 text_model = gemini-1.5-flash-latest  # Text generation model
 tts_model = gemini-2.5-flash-preview-tts  # TTS model
 tts_voice = Kore            # TTS voice name
-use_claude = no             # Use Claude for content generation
-claude_api = YOUR_API_KEY   # Claude API key
-claude_model = claude-3-haiku-20240307  # Claude model
+
 ```
 
 ## 🤖 AI Model Options
@@ -109,15 +99,7 @@ UnQTube supports Google's Gemini AI for script generation and TTS:
   - `gemini-2.5-flash-preview-tts` - Fast TTS generation
   - `gemini-2.5-pro-preview-tts` - Higher quality voice synthesis
 
-### Claude Models
-UnQTube now supports Anthropic's Claude AI as an alternative for content generation:
 
-- **Available Models**:
-  - `claude-3-haiku-20240307` - Fast, efficient text generation
-  - `claude-3-sonnet-20240229` - Balanced speed and quality
-  - `claude-3-opus-20240229` - Highest quality, most detailed content
-
-To use Claude, set `use_claude = yes` in your config.txt file and provide your Claude API key.
 
 ## 🗣️ Supported Languages
 

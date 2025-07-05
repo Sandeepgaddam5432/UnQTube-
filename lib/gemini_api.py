@@ -21,16 +21,105 @@ def get_gemini_key():
     return api_key
 
 def list_available_gemini_models(api_key=None):
-    """Return a fixed list containing only gemini-2.5-flash-preview-04-17
+    """Fetch available Gemini models dynamically from the API
     
     Args:
-        api_key: Not used but kept for compatibility
+        api_key: Optional Gemini API key, if not provided will try to get from env/config
         
     Returns:
-        A list containing only the gemini-2.5-flash-preview-04-17 model
+        A dictionary with separate lists for text and TTS models
     """
-    # Always return only the fixed model
-    return ["models/gemini-2.5-flash-preview-04-17"]
+    if not api_key:
+        api_key = get_gemini_key()
+        
+    if not api_key:
+        print("Warning: No Gemini API key found. Using default models.")
+        return get_default_models()
+    
+    try:
+        # Fetch models from the API
+        url = "https://generativelanguage.googleapis.com/v1beta/models"
+        params = {"key": api_key}
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            models_data = response.json()
+            text_models = []
+            tts_models = []
+            
+            for model in models_data.get("models", []):
+                model_name = model.get("name", "")
+                display_name = model.get("displayName", "")
+                supported_methods = model.get("supportedGenerationMethods", [])
+                
+                # Filter for text generation models
+                if "generateContent" in supported_methods:
+                    # Extract just the model ID (remove 'models/' prefix)
+                    model_id = model_name.replace("models/", "") if model_name.startswith("models/") else model_name
+                    
+                    # Categorize models
+                    if "tts" in model_id.lower() or "text-to-speech" in display_name.lower():
+                        tts_models.append(model_id)
+                    elif any(keyword in model_id.lower() for keyword in ["gemini", "bison", "chat"]):
+                        text_models.append(model_id)
+            
+            # Sort models by name for better organization
+            text_models.sort()
+            tts_models.sort()
+            
+            if text_models or tts_models:
+                print(f"✅ Successfully fetched {len(text_models)} text and {len(tts_models)} TTS models from Gemini API")
+                return {
+                    "text_models": text_models,
+                    "tts_models": tts_models,
+                    "all_voices": get_default_tts_voices()  # Keep our curated voice list
+                }
+            else:
+                print("Warning: No suitable models found in API response. Using defaults.")
+                return get_default_models()
+                
+        else:
+            print(f"Warning: Failed to fetch models from API (status {response.status_code}). Using defaults.")
+            return get_default_models()
+            
+    except Exception as e:
+        print(f"Warning: Error fetching models from API: {e}. Using defaults.")
+        return get_default_models()
+
+def get_default_models():
+    """Return default model lists when API fetch fails
+    
+    Returns:
+        A dictionary with default text and TTS models
+    """
+    return {
+        "text_models": [
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro-latest",
+            "gemini-2.5-flash-preview-04-17"
+        ],
+        "tts_models": [
+            "gemini-2.5-flash-preview-tts",
+            "gemini-2.5-pro-preview-tts"
+        ],
+        "all_voices": get_default_tts_voices()
+    }
+
+def get_default_tts_voices():
+    """Return the curated list of high-quality TTS voices
+    
+    Returns:
+        List of available TTS voice names
+    """
+    return [
+        'Kore', 'Puck', 'Charon', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
+        'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib',
+        'Rasalgethi', 'Laomedeia', 'Achernar', 'Alnilam', 'Schedar',
+        'Gacrux', 'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Vindemiatrix',
+        'Sadachbia', 'Sadaltager', 'Sulafat', 'Zephyr', 'Fenrir',
+        'Autonoe', 'Enceladus'
+    ]
 
 def is_beta_model(model_name):
     """Always returns True as we're exclusively using gemini-2.5-flash-preview-04-17
