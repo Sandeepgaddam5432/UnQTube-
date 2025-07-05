@@ -14,12 +14,7 @@ from lib.media_api import translateto
 from lib.language import get_language_code
 from lib.config_utils import read_config_file
 
-# Import Claude API if available
-try:
-    from lib.claude_api import generate_script_with_claude, is_claude_available
-    CLAUDE_AVAILABLE = True
-except ImportError:
-    CLAUDE_AVAILABLE = False
+# Using Google Gemini API for content generation
 
 class PromptChain:
     """Advanced prompt chain for sophisticated content generation
@@ -43,13 +38,9 @@ class PromptChain:
         self.results = {}
         self.max_retries = 2
         
-        # Determine which AI model to use
+        # Using Google Gemini AI for content generation
         config = read_config_file()
-        self.use_claude = config.get('use_claude', 'no').lower() in ['yes', 'true', '1'] and CLAUDE_AVAILABLE
-        if self.use_claude:
-            print("Using Claude AI for content generation")
-        else:
-            print("Using Gemini AI for content generation")
+        print("Using Google Gemini AI for content generation")
         
     def _infer_genre(self, title):
         """Infer a general genre if none is provided"""
@@ -1064,44 +1055,16 @@ class PromptChain:
         return output
     
     async def _generate_content(self, prompt):
-        """Generate content using the selected AI model
-        
-        This function uses either Gemini or Claude based on configuration.
+        """Generate content using Google Gemini AI
         
         Args:
             prompt (str): The prompt to send to the AI
             
         Returns:
-            str: Generated content from the AI
+            str: Generated content from Gemini
         """
-        try:
-            # Use Claude if configured and available
-            if self.use_claude:
-                # Get Claude model from config or use default
-                config = read_config_file()
-                claude_model = config.get('claude_model', 'claude-3-haiku-20240307')
-                
-                # Generate content with Claude
-                return await generate_script_with_claude(prompt, model=claude_model)
-            else:
-                # Use Gemini (default)
-                return await generate_script_with_gemini(prompt)
-        except Exception as e:
-            print(f"Error generating content: {e}")
-            
-            # If one AI fails, try the other as fallback
-            try:
-                if self.use_claude:
-                    print("Claude API failed. Falling back to Gemini...")
-                    return await generate_script_with_gemini(prompt)
-                elif CLAUDE_AVAILABLE:
-                    print("Gemini API failed. Trying Claude as fallback...")
-                    return await generate_script_with_claude(prompt)
-            except Exception as fallback_error:
-                print(f"Fallback also failed: {fallback_error}")
-                
-            # If all attempts fail, raise the original error
-            raise e
+        # Use Google Gemini for content generation
+        return await generate_script_with_gemini(prompt)
 
 
 async def generate_top10_content(title, genre="", language="english"):

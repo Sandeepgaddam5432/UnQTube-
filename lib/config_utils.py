@@ -27,13 +27,6 @@ _rate_limit_state = {
         "requests_count": 0,
         "rate_limit_hit": False
     },
-    "claude_api": {
-        "last_request_time": 0,
-        "backoff_time": 0.5,  # Initial backoff in seconds
-        "max_backoff": 30,    # Maximum backoff in seconds
-        "requests_count": 0,
-        "rate_limit_hit": False
-    },
     "pexels_api": {
         "last_request_time": 0,
         "backoff_time": 0.5,
@@ -147,7 +140,7 @@ def intelligent_rate_limit_handling(retry_after=None, api_type=None):
     
     Args:
         retry_after (int): Retry-after value from API response header (seconds)
-        api_type (str): API type identifier (e.g., 'gemini_api', 'claude_api')
+        api_type (str): API type identifier (e.g., 'gemini_api', 'pexels_api')
         
     Returns:
         float: The actual sleep time used (seconds)
