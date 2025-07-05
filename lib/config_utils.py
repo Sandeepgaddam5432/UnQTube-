@@ -57,11 +57,11 @@ def read_config_file(filename="config.txt"):
     try:
         if os.path.exists(filename):
             with open(filename, "r", encoding="utf-8") as file:
-                for line in file:
+        for line in file:
                     line = line.strip()
                     if line and "=" in line and not line.startswith("#"):
                         key, value = line.split("=", 1)
-                        config[key.strip()] = value.strip()
+                config[key.strip()] = value.strip()
     except Exception as e:
         print(f"Error reading config file {filename}: {e}")
     return config

@@ -53,12 +53,12 @@ def save_config():
         # Handle long video tab
         if current_tab == 0:
             # Save config values
-            update_config_file('config.txt', 'general_topic', general_topic_entry.get())
-            update_config_file('config.txt', 'time', time_entry.get())
-            update_config_file('config.txt', 'intro_video', intro_video_var.get())
-            update_config_file('config.txt', 'pexels_api', pexels_entry.get())
-            update_config_file('config.txt', 'language', language_combobox.get())
-            update_config_file('config.txt', 'multi_speaker', multi_speaker_var.get())
+        update_config_file('config.txt', 'general_topic', general_topic_entry.get())
+        update_config_file('config.txt', 'time', time_entry.get())
+        update_config_file('config.txt', 'intro_video', intro_video_var.get())
+        update_config_file('config.txt', 'pexels_api', pexels_entry.get())
+        update_config_file('config.txt', 'language', language_combobox.get())
+        update_config_file('config.txt', 'multi_speaker', multi_speaker_var.get())
             update_config_file('config.txt', 'use_gemini', use_gemini_var.get())
             update_config_file('config.txt', 'text_model', text_model_combobox.get())
             update_config_file('config.txt', 'tts_model', tts_model_combobox.get())
@@ -81,8 +81,8 @@ def save_config():
         # Handle short video tab
         elif current_tab == 1:
             # Save config values
-            update_config_file('config.txt', 'multi_speaker', multi_speaker_var2.get())
-            update_config_file('config.txt', 'pexels_api', pexels_entry2.get())
+        update_config_file('config.txt', 'multi_speaker', multi_speaker_var2.get())
+        update_config_file('config.txt', 'pexels_api', pexels_entry2.get())
             update_config_file('config.txt', 'language', language_combobox2.get())
             update_config_file('config.txt', 'use_gemini', use_gemini_var2.get())
             update_config_file('config.txt', 'text_model', text_model_combobox2.get())
